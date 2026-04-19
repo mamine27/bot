@@ -324,8 +324,7 @@ bot.command('set_group', async (ctx) => {
 bot.command('set_public_channel', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('PUBLIC_CHANNEL_ID', ctx.chat.id.toString());
-  await setSetting('STATUS_MESSAGE_ID_EN', '');
-  await setSetting('STATUS_MESSAGE_ID_AM', '');
+  await setSetting('STATUS_MESSAGE_ID_COMBINED', '');
   await ctx.reply(`📢 <b>Dashboard Connected.</b>`, { parse_mode: 'HTML' });
   await updatePublicStatus(ctx.telegram);
 });
@@ -353,8 +352,7 @@ bot.command('hard_reset', async (ctx) => {
 bot.action('confirm_hard_reset', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.answerCbQuery('Denied.');
   await db.query('DELETE FROM donations');
-  await setSetting('STATUS_MESSAGE_ID_EN', '');
-  await setSetting('STATUS_MESSAGE_ID_AM', '');
+  await setSetting('STATUS_MESSAGE_ID_COMBINED', '');
   await ctx.editMessageText('✅ <b>DATABASE WIPED.</b> All donations cleared.', { parse_mode: 'HTML' });
 });
 

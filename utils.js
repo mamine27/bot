@@ -37,56 +37,60 @@ async function updatePublicStatus(tg) {
   
   if (!goal || !channelId) return;
 
-  const stats = await db.get("SELECT SUM(amount) as total FROM donations WHERE status = 'approved'");
+  const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
   const total = parseFloat(stats.total || 0);
+  const numEvents = stats.count || 0;
   const percent = Math.min(100, (total / goal) * 100);
+  const remaining = Math.max(0, goal - total);
+  
   const topDonations = await db.all(`SELECT SUM(amount) as total FROM donations WHERE status = 'approved' GROUP BY user_id ORDER BY total DESC LIMIT 5`);
 
-  const generatePost = (lang) => {
-    const l = locales[lang];
-    const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    
-    let text = `${l.stats_header}\n\n` +
-               `<code>${getProgressBar(percent)}</code>\n\n` +
-               `${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n` +
-               `${l.stats_target}: <b>${goal.toLocaleString()} ETB</b>\n\n`;
+  let botUsername = 'your_bot_username';
+  try {
+     const me = await tg.getMe();
+     botUsername = me.username;
+  } catch(e) {}
+  
+  const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    if (topDonations.length > 0) {
-      const headerTitle = l.leaderboard_header.split('\n')[0];
-      text += `<b>${headerTitle}</b>\n`;
-      topDonations.forEach((d, i) => {
-        const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '🔹'));
-        text += `${medal} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`;
-      });
-      text += `\n`;
-    }
+  let text = `📊 <b>Yad Al-Awn | Live Progress / አጠቃላይ ሂደት</b>\n\n` +
+             `<code>${getProgressBar(percent)}</code>\n\n` +
+             `💰 <b>Total / የተሰበሰበ:</b> ${total.toLocaleString()} ETB\n` +
+             `🎯 <b>Goal / የልገሳ ግብ:</b> ${goal.toLocaleString()} ETB\n` +
+             `⏳ <b>Remaining / የቀረው:</b> ${remaining.toLocaleString()} ETB\n` +
+             `🤝 <b>Events / የተረጋገጡ ልገሳዎች:</b> ${numEvents}\n\n`;
 
-    text += `🕒 <i>Update: ${now}</i>\n` +
-            `@your_bot_username`;
-    return text;
+  if (topDonations.length > 0) {
+    text += `🌟 <b>Top Donors / ቀዳሚ ለጋሾች</b>\n`;
+    text += `<i>May Allah reward our generous contributors / አላህ ለጋሾቻችንን ይመንዳል:</i>\n`;
+    topDonations.forEach((d, i) => {
+      const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '🔹'));
+      text += `${medal} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `🕒 <i>Update: ${now}</i>\n` +
+          `@${botUsername}`;
+
+  const key = 'STATUS_MESSAGE_ID_COMBINED';
+  const msgId = await getSettings(key);
+  
+  const sendNew = async () => {
+    const sent = await tg.sendMessage(channelId, text, { parse_mode: 'HTML' });
+    await setSetting(key, sent.message_id);
+    await tg.pinChatMessage(channelId, sent.message_id).catch(() => {});
   };
 
-  const syncPost = async (lang, key) => {
-    const msgId = await getSettings(key);
-    const text = generatePost(lang);
-    if (msgId) {
-      try {
-        await tg.editMessageText(channelId, parseInt(msgId), null, text, { parse_mode: 'HTML' });
-      } catch (e) {
-        const sent = await tg.sendMessage(channelId, text, { parse_mode: 'HTML' });
-        await setSetting(key, sent.message_id);
-        await tg.pinChatMessage(channelId, sent.message_id).catch(() => {});
-      }
-    } else {
-      const sent = await tg.sendMessage(channelId, text, { parse_mode: 'HTML' });
-      await setSetting(key, sent.message_id);
-      await tg.pinChatMessage(channelId, sent.message_id).catch(() => {});
+  if (msgId) {
+    try {
+      await tg.editMessageText(channelId, parseInt(msgId), null, text, { parse_mode: 'HTML' });
+    } catch (e) {
+      await sendNew();
     }
-  };
-
-  // Synchronize both English and Amharic posts
-  await syncPost('en', 'STATUS_MESSAGE_ID_EN');
-  await syncPost('am', 'STATUS_MESSAGE_ID_AM');
+  } else {
+    await sendNew();
+  }
 }
 
 module.exports = {
