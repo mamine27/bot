@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Executive Dashboard Active. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Full Executive Suite Restored. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -50,18 +50,23 @@ async function updateCommands(tg, userId, role) {
       { command: 'cancel', description: 'Cancel / ሰርዝ' }
     ];
 
-    // Expanded SuperAdmin Menu
-    if (role === 'superadmin') {
+    if (role === 'superadmin' || role === 'collector') {
       commands.push(
         { command: 'admin_hub', description: 'Admin Stats / የአስተዳዳሪ ሁኔታ' },
-        { command: 'broadcast', description: 'Send Announcement / መልዕክት ላክ' },
-        { command: 'generate_invite', description: 'Invite Collector / ሰብሳቢ ጋብዝ' },
-        { command: 'set_bank', description: 'Update Bank Details / ባንክ ቀይር' },
-        { command: 'set_group', description: 'Connect Report Group / ግሩፕ አገናኝ' },
-        { command: 'set_public_channel', description: 'Connect Public Channel / ቻናል አገናኝ' }
+        { command: 'my_links', description: 'Referral Link / የእኔ ሊንክ' },
+        { command: 'my_stats', description: 'My Impact Stats / የእኔ ስታቲስቲክስ' }
       );
-    } else if (role === 'collector') {
-      commands.push({ command: 'admin_hub', description: 'My Collector Stats / የልገሳ ስታቲስቲክስ' });
+    }
+    
+    if (role === 'superadmin') {
+      commands.push(
+        { command: 'broadcast', description: 'Announcement / መልዕክት ላክ' },
+        { command: 'generate_invite', description: 'Invite Collector / ሰብሳቢ ጋብዝ' },
+        { command: 'set_bank', description: 'Update Banks / ባንክ ቀይር' },
+        { command: 'set_goal', description: 'Set Mission Goal / ግብ አስቀምጥ' },
+        { command: 'set_group', description: 'Connect Group / ግሩፕ አገናኝ' },
+        { command: 'set_public_channel', description: 'Connect Channel / ቻናል አገናኝ' }
+      );
     }
     
     await tg.setMyCommands(commands, { scope: { type: 'chat', chat_id: userId } });
@@ -100,6 +105,7 @@ bot.start(async (ctx) => {
   }
 
   const lang = user.language || 'en';
+  const l = locales[lang];
   const activePayload = payload || ctx.session.startPayload;
 
   if (activePayload?.startsWith('invite_')) {
@@ -155,28 +161,57 @@ bot.command('top_donors', topDonorsHandler);
 bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'], topDonorsHandler);
 
 const historyHandler = async (ctx) => {
-  try {
-    const lang = await getUserLang(ctx);
-    const l = locales[lang];
-    const userId = ctx.from.id;
-    const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [userId]);
-    if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty);
-    const history = await db.all(`SELECT amount, status, created_at FROM donations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`, [userId]);
-    let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
-    history.forEach(d => {
-      const icon = d.status === 'approved' ? '✅' : '⏳';
-      text += `${icon} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`;
-    });
-    await ctx.reply(text, { parse_mode: 'HTML' });
-  } catch (e) {
-    console.error('History Handler Error:', e.message);
-    await ctx.reply('❌ System Error.');
-  }
+  const lang = await getUserLang(ctx);
+  const l = locales[lang];
+  const userId = ctx.from.id;
+  const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [userId]);
+  if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty);
+  const history = await db.all(`SELECT amount, status, created_at FROM donations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`, [userId]);
+  let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
+  history.forEach(d => {
+    const icon = d.status === 'approved' ? '✅' : '⏳';
+    text += `${icon} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`;
+  });
+  await ctx.reply(text, { parse_mode: 'HTML' });
 };
 bot.command('my_history', historyHandler);
 bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donation Portfolio', '📦 My Contribution History'], historyHandler);
 
-// --- 👑 EXECUTIVE TOOLS ---
+// --- 👑 COLLECTOR TOOLKIT ---
+
+bot.command('my_links', async (ctx) => {
+  if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const botInfo = await ctx.telegram.getMe();
+  const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
+  await ctx.reply(`🔗 <b>My Donor Referral Link</b>\n\nShare this link with donors to track your impact:\n<code>${link}</code>`, { parse_mode: 'HTML' });
+});
+
+bot.command('my_stats', async (ctx) => {
+  if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const stats = await db.get(`
+    SELECT COUNT(*) as count, 
+           SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved_total,
+           SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as pending_total
+    FROM donations WHERE collector_id = $1
+  `, [ctx.from.id]);
+
+  let text = `📊 <b>My Collector Impact</b>\n\n` +
+             `✅ Approved Cap: <b>${parseFloat(stats.approved_total || 0).toLocaleString()} ETB</b>\n` +
+             `⏳ Pending Cap: <b>${parseFloat(stats.pending_total || 0).toLocaleString()} ETB</b>\n` +
+             `🤝 Total Donor Events: <b>${stats.count}</b>`;
+  await ctx.reply(text, { parse_mode: 'HTML' });
+});
+
+// --- 🏛 EXECUTIVE TOOLS ---
+
+bot.command('set_goal', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const amount = parseFloat(ctx.message.text.split(' ')[1]);
+  if (isNaN(amount)) return ctx.reply('Usage: /set_goal <amount>');
+  await setSetting('GOAL_AMOUNT', amount);
+  await ctx.reply(`🎯 <b>Mission Goal Updated:</b> <code>${amount.toLocaleString()} ETB</code>`, { parse_mode: 'HTML' });
+  await updatePublicStatus(ctx.telegram);
+});
 
 bot.command('generate_invite', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
@@ -184,21 +219,21 @@ bot.command('generate_invite', async (ctx) => {
   await db.query('INSERT INTO admin_invites (token, role) VALUES ($1, $2)', [token, 'collector']);
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=invite_${token}`;
-  await ctx.reply(`👑 <b>Collector Invitation Generated</b>\n\nShare this link to authorize a new collector:\n<code>${link}</code>`, { parse_mode: 'HTML' });
+  await ctx.reply(`👑 <b>Collector Invite Generated</b>\n\n<code>${link}</code>`, { parse_mode: 'HTML' });
 });
 
 bot.command('set_bank', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const details = ctx.message.text.split('\n').slice(1).join('\n');
-  if (!details) return ctx.reply('📑 Usage: /set_bank\n[Details]');
+  if (!details) return ctx.reply('Usage: /set_bank\n[Details]');
   await setSetting('BANK_DETAILS', details);
-  await ctx.reply('✅ Bank Information Updated.');
+  await ctx.reply('✅ Bank Details Updated.');
 });
 
 bot.command('admin_hub', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const pending = await db.get("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
-  await ctx.reply(`🛠 <b>Admin Hub</b>\nPending Verifications: <b>${pending.count}</b>`, { parse_mode: 'HTML' });
+  await ctx.reply(`🛠 Admin Hub\nPending: ${pending.count}`);
 });
 
 bot.action(/approve_(\d+)/, async (ctx) => {
@@ -247,7 +282,7 @@ bot.command('broadcast', async (ctx) => {
   await ctx.reply(`✅ Broadcast complete.`);
 });
 
-// Admin Connections
+// Admin System
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
@@ -270,6 +305,6 @@ bot.command('set_public_channel', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (Executive Menu Registered)');
+    console.log('🏛 Yad Al-Awn Portal Active (Full Suite Restored)');
   } catch (e) { console.error('Launch Failed:', e.message); }
 })();
