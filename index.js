@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Full Executive Suite Restored. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Premium UI Active. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -183,7 +183,12 @@ bot.command('my_links', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
-  await ctx.reply(`🔗 <b>My Donor Referral Link</b>\n\nShare this link with donors to track your impact:\n<code>${link}</code>`, { parse_mode: 'HTML' });
+  await ctx.reply(`🔗 <b>My Donor Referral Link</b>\n\nShare this link with donors to track your impact:`, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([
+      [Markup.button.url('🚀 Open Referral Link', link)]
+    ])
+  });
 });
 
 bot.command('my_stats', async (ctx) => {
@@ -219,7 +224,12 @@ bot.command('generate_invite', async (ctx) => {
   await db.query('INSERT INTO admin_invites (token, role) VALUES ($1, $2)', [token, 'collector']);
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=invite_${token}`;
-  await ctx.reply(`👑 <b>Collector Invite Generated</b>\n\n<code>${link}</code>`, { parse_mode: 'HTML' });
+  await ctx.reply(`👑 <b>Collector Invite Generated</b>\n\nUse the link below to authorize a new collector:`, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([
+      [Markup.button.url('🔓 Open Authorization Link', link)]
+    ])
+  });
 });
 
 bot.command('set_bank', async (ctx) => {
@@ -305,6 +315,6 @@ bot.command('set_public_channel', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (Full Suite Restored)');
+    console.log('🏛 Yad Al-Awn Portal Active (Premium UI Restored)');
   } catch (e) { console.error('Launch Failed:', e.message); }
 })();
