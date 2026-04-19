@@ -23,7 +23,7 @@ const reportScene = new Scenes.WizardScene(
     }
     ctx.wizard.state.amount = amount;
     await ctx.reply(
-      '✅ <b>Amount Logged.</b>\n\nPlease upload a clear image of your transaction receipt or transfer confirmation to facilitate the verification process.\n\n(Alternatively, type "none" if documentation is unavailable.)',
+      '✅ <b>Contribution Registered.</b>\n\nPlease upload a clear image of your transaction receipt or transfer confirmation to facilitate the verification process.\n\n(Alternatively, type "none" if documentation is currently unavailable.)',
       { parse_mode: 'HTML', ...Markup.keyboard(['none']).oneTime().resize() }
     );
     return ctx.wizard.next();
@@ -70,7 +70,7 @@ const reportScene = new Scenes.WizardScene(
       const donationId = res.rows[0].id;
 
       await ctx.reply(
-        '✅ <b>Report Submitted.</b>\n\nYour contribution has been queued for administrative verification. You will receive a notification once the process is complete. Your generosity is deeply valued. 🙏',
+        '✅ <b>Report Submitted Successfully.</b>\n\nYour contribution has been queued for administrative verification. You will receive a notification once the capital is secured. Your generosity is deeply valued. 🙏',
         Markup.removeKeyboard()
       );
 
@@ -104,7 +104,7 @@ const reportScene = new Scenes.WizardScene(
       }
     } catch (err) {
       console.error('Submission Error:', err.message);
-      await ctx.reply('❌ <b>Submission Error.</b>\n\nAn internal error occurred while processing your report. Please try again or contact a SuperAdmin.', { parse_mode: 'HTML' });
+      await ctx.reply('❌ <b>Mission Submission Error.</b>\n\nAn internal error occurred while processing your report. Please try again or contact a SuperAdmin.', { parse_mode: 'HTML' });
     }
 
     return ctx.scene.leave();

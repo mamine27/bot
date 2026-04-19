@@ -72,7 +72,7 @@ function toCSV(data) {
 }
 
 bot.command('cancel', async (ctx) => {
-  await ctx.reply('⚠️ Action cancelled.', Markup.removeKeyboard());
+  await ctx.reply('⚠️ Interaction terminated. Operational state reset.', Markup.removeKeyboard());
   return ctx.scene.leave();
 });
 
@@ -90,12 +90,12 @@ bot.start(async (ctx) => {
         await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4)', 
           [userId, ctx.from.username, username, invite.role]);
         await updateCommands(ctx.telegram, userId, invite.role);
-        await ctx.reply(`👑 <b>Welcome to the Team!</b>\n\nYou have been added as a <b>${invite.role}</b>. Your menu has been upgraded!`, { parse_mode: 'HTML' });
+        await ctx.reply(`👑 <b>Welcome to the Operational Team!</b>\n\nYou have been authorized as a <b>${invite.role}</b>. Your interface has been upgraded with administrative capabilities. Use /admin_panel to get started!`, { parse_mode: 'HTML' });
       } catch (e) {
-        await ctx.reply('❌ You are already an admin.');
+        await ctx.reply('❌ Authorization Error: User is already registered as an administrator.');
       }
     } else {
-      await ctx.reply('❌ This invitation link is invalid.');
+      await ctx.reply('❌ Deployment Error: The provided invitation token is invalid or has expired.');
     }
   }
 
@@ -110,8 +110,10 @@ bot.start(async (ctx) => {
   }
 
   await ctx.reply(
-    `🙏 <b>Welcome to the Support Portal.</b>\n\n` +
-    `Select an option below to begin:`,
+    `🙏 <b>Welcome to the mission Support Portal.</b>\n\n` +
+    `Your presence here signifies a commitment to making a tangible difference. This bot facilitates the reporting and verification of contributions to our current charity mission.\n\n` +
+    `✨ <i>"We make a living by what we get, but we make a life by what we give."</i>\n\n` +
+    `Select an option below to initiate your participation:`,
     {
       parse_mode: 'HTML',
       ...Markup.keyboard([
@@ -131,14 +133,14 @@ bot.hears('📊 Mission Progress', async (ctx) => {
   const goalVal = await getSettings('GOAL_AMOUNT', 0);
   const goal = parseFloat(goalVal);
   
-  let text = `📊 <b>Fundraising Insights</b>\n\n`;
-  text += `Capital Raised: <b>${total.toLocaleString()} ETB</b>\n`;
-  text += `Verified Contributions: <b>${stats.count}</b>\n`;
+  let text = `📊 <b>Strategic Mission Insights</b>\n\n`;
+  text += `Total Capital Secured: <b>${total.toLocaleString()} ETB</b>\n`;
+  text += `Verified Impact Events: <b>${stats.count}</b>\n`;
   
   if (goal > 0) {
     const percent = Math.min(100, (total / goal) * 100);
     text += `Target Objective: <b>${goal.toLocaleString()} ETB</b>\n`;
-    text += `Progress: <b>${percent.toFixed(1)}%</b>`;
+    text += `Current Progress: <b>${percent.toFixed(1)}%</b>`;
   }
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
@@ -151,8 +153,9 @@ async function sendLeaderboard(tg, chatId) {
   `);
 
   let text = '🌟 <b>Mission Impact Board</b>\n\n';
+  text += '<i>Recognizing our top anonymous contributors:</i>\n\n';
   if (donors.length === 0) {
-    text += 'No contributions recorded yet.';
+    text += 'No contributions recorded yet. Be the first to initiate a difference!';
   } else {
     donors.forEach((d, i) => {
       const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '🔹'));
@@ -164,7 +167,7 @@ async function sendLeaderboard(tg, chatId) {
 
 async function showAdminList(ctx) {
   const admins = await db.all('SELECT * FROM admins');
-  let text = '👥 <b>Admin Team</b>\n\n';
+  let text = '👥 <b>Mission Administrative Team</b>\n\n';
   admins.forEach(a => {
     const roleIcon = a.role === 'superadmin' ? '👑' : '👤';
     text += `${roleIcon} <b>${a.name}</b> (${a.role})\nID: <code>${a.id}</code>\n\n`;
@@ -177,44 +180,44 @@ bot.hears('🌟 Impact Board', (ctx) => sendLeaderboard(ctx.telegram, ctx.chat.i
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
-  await ctx.reply(`✅ Success! Reports connected to ${ctx.chat.title || 'this group'}.`);
+  await ctx.reply(`✅ <b>Strategic Connection Established.</b>\n\nThis group (${ctx.chat.title || 'Private Group'}) is now synchronized to receive all donation reports.`, { parse_mode: 'HTML' });
 });
 
 bot.command('set_public_channel', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('PUBLIC_CHANNEL_ID', ctx.chat.id.toString());
   await setSetting('STATUS_MESSAGE_ID', '');
-  await ctx.reply(`📢 Dashboard connected to ${ctx.chat.title}.`);
+  await ctx.reply(`📢 <b>Public Dashboard Synchronized.</b>\n\nThis chat (${ctx.chat.title}) is now established as the public operational status space.`, { parse_mode: 'HTML' });
   await updatePublicStatus(ctx.telegram);
 });
 
 bot.command('unset_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await db.query("DELETE FROM settings WHERE key = $1", ['REPORT_GROUP_ID']);
-  await ctx.reply('🚫 Admin Group Disconnected.');
+  await ctx.reply('🚫 <b>Administrative Group Disconnected.</b>\n\nReports will no longer be transmitted until a new group is configured.', { parse_mode: 'HTML' });
 });
 
 bot.command('unset_public_channel', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await db.query("DELETE FROM settings WHERE key IN ($1, $2)", ['PUBLIC_CHANNEL_ID', 'STATUS_MESSAGE_ID']);
-  await ctx.reply('🚫 Public Dashboard Disconnected.');
+  await ctx.reply('🚫 <b>Public Dashboard Disconnected.</b>\n\nThe mission progress dashboard tracking has been terminated for this channel.', { parse_mode: 'HTML' });
 });
 
 bot.command('set_goal', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const goal = parseFloat(ctx.message.text.split(' ')[1]);
-  if (!goal || goal <= 0) return ctx.reply('Usage: /set_goal <amount>');
+  if (!goal || goal <= 0) return ctx.reply('📑 <b>Usage:</b>\n<code>/set_goal <amount></code>', { parse_mode: 'HTML' });
   await setSetting('TEMP_GOAL', goal.toString());
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('🆕 New Mission (Wipe)', 'goal_wipe'), Markup.button.callback('📈 Continue Current', 'goal_continue')]
   ]);
-  await ctx.reply(`🎯 <b>Objective Entry: ${goal.toLocaleString()} ETB</b>\nHow to apply?`, { parse_mode: 'HTML', ...keyboard });
+  await ctx.reply(`🎯 <b>Objective Entry: ${goal.toLocaleString()} ETB</b>\n\nHow would you like to apply this strategic objective?`, { parse_mode: 'HTML', ...keyboard });
 });
 
 bot.action('goal_wipe', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
   const goal = await getSettings('TEMP_GOAL');
-  if (!goal) return ctx.answerCbQuery('Expired.');
+  if (!goal) return ctx.answerCbQuery('Session expired.');
 
   try {
     const nonDonors = await db.all(`
@@ -223,22 +226,22 @@ bot.action('goal_wipe', async (ctx) => {
       WHERE donations.id IS NULL
     `);
     for (const donor of nonDonors) {
-      await ctx.telegram.sendMessage(donor.id, `🆕 <b>New Mission Launch!</b> Target: <b>${parseFloat(goal).toLocaleString()} ETB</b>.`, { parse_mode: 'HTML' }).catch(()=>{});
+      await ctx.telegram.sendMessage(donor.id, `🆕 <b>New Mission Strategic Launch!</b>\n\nWe have initiated a fresh fundraising campaign with a target objective of <b>${parseFloat(goal).toLocaleString()} ETB</b>.\n\nAs you haven't participated in previous rounds, we invite you to be among the first to contribute to this brand new milestone! 🚀\n\nUse /donate to begin.`, { parse_mode: 'HTML' }).catch(()=>{});
     }
     await db.query('TRUNCATE donations CASCADE');
     await setSetting('STATUS_MESSAGE_ID', '');
     await setSetting('GOAL_AMOUNT', goal);
-    await ctx.editMessageText(`✅ <b>Mission Refresh Complete.</b> Target: <b>${parseFloat(goal).toLocaleString()} ETB</b>.`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ <b>Strategic Refresh Complete.</b>\n\nA new mission has been initiated with a target of <b>${parseFloat(goal).toLocaleString()} ETB</b>. Previous history has been cleared.`, { parse_mode: 'HTML' });
     await updatePublicStatus(ctx.telegram);
-  } catch (err) { await ctx.reply('❌ Error: ' + err.message); }
+  } catch (err) { await ctx.reply('❌ System Error: ' + err.message); }
 });
 
 bot.action('goal_continue', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
   const goal = await getSettings('TEMP_GOAL');
-  if (!goal) return ctx.answerCbQuery('Expired.');
+  if (!goal) return ctx.answerCbQuery('Session expired.');
   await setSetting('GOAL_AMOUNT', goal);
-  await ctx.editMessageText(`🎯 Goal updated to <b>${parseFloat(goal).toLocaleString()} ETB</b>.`, { parse_mode: 'HTML' });
+  await ctx.editMessageText(`🎯 <b>Strategic Objective Updated.</b>\n\nCurrent progress is retained. The new target is <b>${parseFloat(goal).toLocaleString()} ETB</b>.`, { parse_mode: 'HTML' });
   await updatePublicStatus(ctx.telegram);
 });
 
@@ -248,15 +251,15 @@ bot.command('generate_invite', async (ctx) => {
   await db.query('INSERT INTO admin_invites (token, role) VALUES ($1, $2)', [token, 'collector']);
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=invite_${token}`;
-  await ctx.reply(`🚀 <a href="${link}">Direct Launch Link</a>\n<code>${link}</code>`, { parse_mode: 'HTML' });
+  await ctx.reply(`🎟 <b>Portal Recruitment Access</b>\n\nA secure invitation link has been generated for new team members:\n\n🚀 <a href="${link}">Direct Launch Link</a>\n<code>${link}</code>\n\n⚠️ <i>Share this only with authorized personnel.</i>`, { parse_mode: 'HTML' });
 });
 
 bot.command('remove_admin', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const targetId = ctx.message.text.split(' ')[1];
-  if (!targetId) return ctx.reply('Usage: /remove_admin <id>');
+  if (!targetId) return ctx.reply('📑 <b>Usage:</b>\n<code>/remove_admin <user_id></code>', { parse_mode: 'HTML' });
   await db.query('DELETE FROM admins WHERE id = $1', [targetId]);
-  await ctx.reply('✅ Admin removed.');
+  await ctx.reply('✅ <b>Administrative Access Revoked.</b>', { parse_mode: 'HTML' });
 });
 
 bot.command('collector_stats', async (ctx) => {
@@ -268,62 +271,102 @@ bot.command('collector_stats', async (ctx) => {
     LEFT JOIN donations d ON u.id = d.user_id AND d.status = 'approved'
     WHERE a.role = 'collector' GROUP BY a.id ORDER BY total_amount DESC
   `);
-  let text = '🏁 <b>Collector Stats</b>\n\n';
+  let text = '🏁 <b>Collector Performance Metrics</b>\n\n';
   stats.forEach(s => {
     const rate = s.total_invites > 0 ? ((s.total_donors / s.total_invites) * 100).toFixed(1) : 0;
-    text += `👤 <b>${s.name}</b>: ${parseFloat(s.total_amount || 0).toLocaleString()} ETB (${rate}%)\n`;
+    text += `👤 <b>${s.name}</b>\n├ Secured: <b>${parseFloat(s.total_amount || 0).toLocaleString()} ETB</b>\n├ Yield: <b>${s.total_donors} / ${s.total_invites} Users</b>\n└ Efficiency: <b>${rate}%</b>\n\n`;
   });
+  if (stats.length === 0) text += 'No collector performance data available yet.';
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
 bot.command('broadcast', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const msg = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!msg) return ctx.reply('📑 <b>Usage:</b>\n<code>/broadcast <message></code>', { parse_mode: 'HTML' });
   const users = await db.all('SELECT id FROM users');
-  for (const u of users) await ctx.telegram.sendMessage(u.id, `📢 ${msg}`, { parse_mode: 'HTML' }).catch(()=>{});
-  await ctx.reply('✅ Sent.');
+  for (const u of users) await ctx.telegram.sendMessage(u.id, `📢 <b>Strategic Announcement</b>\n\n${msg}`, { parse_mode: 'HTML' }).catch(()=>{});
+  await ctx.reply(`✅ <b>Broadcast Transmission Complete.</b>`, { parse_mode: 'HTML' });
 });
 
 bot.command('hard_reset', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  if (!ctx.message.text.includes('CONFIRM')) return ctx.reply('Type /hard_reset CONFIRM');
+  if (!ctx.message.text.includes('CONFIRM_HARD_RESET')) {
+    return ctx.reply('☢️ <b>CRITICAL: Hard Reset</b>\n\nType <code>/hard_reset CONFIRM_HARD_RESET</code> to execute a full system wipe.');
+  }
   await db.query('TRUNCATE donations, users, admin_invites CASCADE');
-  await db.query('DELETE FROM admins WHERE id != $1', [ctx.from.id]);
-  await ctx.reply('☢️ Hard Reset Done.');
+  await db.query('DELETE FROM admins WHERE id != $1', [ctx.from.id.toString()]);
+  await ctx.reply('☢️ <b>Full System Hard Reset Executed.</b> All tactical and operational data has been purged.', { parse_mode: 'HTML' });
 });
 
 bot.command('test_notifications', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const users = await db.all('SELECT id FROM users');
-  await ctx.reply(`📋 Audience: ${users.length} users.`, {
-    ...Markup.inlineKeyboard([[Markup.button.callback('🚀 Test Broadcast', 'test_broadcast_run')]])
+  let text = `📋 <b>Mailing List Audit</b>\n\nTotal Registered Audience: <b>${users.length} Users</b>\n\nInitiate a system integrity test?`;
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([[Markup.button.callback('🚀 Execute System Test', 'test_broadcast_run')]])
   });
 });
 
 bot.action('test_broadcast_run', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
+  await ctx.answerCbQuery('Transmitting test...');
   const users = await db.all('SELECT id FROM users');
-  for (const u of users) await ctx.telegram.sendMessage(u.id, '🔔 System Test.').catch(()=>{});
-  await ctx.editMessageText('✅ Done.');
+  for (const u of users) await ctx.telegram.sendMessage(u.id, '🔔 <b>System Integrity Test</b>\n\nConnection verification successful. No action required.', { parse_mode: 'HTML' }).catch(()=>{});
+  await ctx.editMessageText('✅ <b>Diagnostic Broadcast Complete.</b> Deliverability verified.', { parse_mode: 'HTML' });
 });
 
 bot.command('my_link', async (ctx) => {
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
-  await ctx.reply(`🚀 <a href="${link}">Your Link</a>\n<code>${link}</code>`, { parse_mode: 'HTML' });
+  await ctx.reply(`🔗 <b>Your Strategic Referral Link</b>\n\nEvery donor who joins through this link will be attributed to your portfolio:\n\n🚀 <a href="${link}">Launch Referral Portal</a>\n<code>${link}</code>`, { parse_mode: 'HTML' });
 });
 
 bot.action(/approve_(\d+)/, async (ctx) => {
-  if (!await isAdmin(ctx.from.id)) return ctx.answerCbQuery('No.');
+  if (!await isAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
   const id = ctx.match[1];
+  const donation = await db.get('SELECT * FROM donations WHERE id = $1', [id]);
+  if (!donation || donation.status !== 'pending') return ctx.answerCbQuery('Report already processed.');
+  
   await db.query("UPDATE donations SET status = 'approved', approved_by = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2", [ctx.from.id, id]);
   await updatePublicStatus(ctx.telegram);
-  await ctx.editMessageText('✅ Approved');
+  
+  const donor = await db.get('SELECT username FROM users WHERE id = $1', [donation.user_id]);
+  const donorName = donor?.username || 'Anonymous';
+  
+  const msg = ctx.callbackQuery.message;
+  const statusText = '\n\n✅ <b>STRATEGICALLY APPROVED</b>';
+  if (msg.photo) await ctx.editMessageCaption((msg.caption || '') + statusText, { parse_mode: 'HTML' });
+  else await ctx.editMessageText((msg.text || '') + statusText, { parse_mode: 'HTML' });
+
+  try { await ctx.telegram.sendMessage(donation.user_id, `✅ <b>Capital Verified.</b> Your contribution of ${donation.amount} ETB has been successfully added to the mission total. Thank you for your support! 🙏`, { parse_mode: 'HTML' }); } catch(e){}
+  
+  const groupId = await getSettings('REPORT_GROUP_ID');
+  if (groupId) {
+    const adminName = ctx.from.username || ctx.from.first_name;
+    await ctx.telegram.sendMessage(groupId, `✅ <b>Approval Log:</b>\n@${adminName} verified <b>${donation.amount} ETB</b> from <b>${donorName}</b>.`, { parse_mode: 'HTML' });
+    await sendLeaderboard(ctx.telegram, groupId);
+  }
 });
 
 bot.action(/reject_(\d+)/, async (ctx) => {
-  if (!await isAdmin(ctx.from.id)) return ctx.answerCbQuery('No.');
-  await db.query("UPDATE donations SET status = 'rejected', approved_by = $1 WHERE id = $2", [ctx.from.id, ctx.match[1]]);
-  await ctx.editMessageText('❌ Rejected');
+  if (!await isAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
+  const id = ctx.match[1];
+  await db.query("UPDATE donations SET status = 'rejected', approved_by = $1 WHERE id = $2", [ctx.from.id, id]);
+  await ctx.editMessageText('❌ <b>REPORT REJECTED</b>', { parse_mode: 'HTML' });
+});
+
+bot.command('my_donations', async (ctx) => {
+  const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [ctx.from.id]);
+  if (!stats || stats.count === '0') return ctx.reply('Your donation portfolio is currently empty. Use /donate to initiate a report.');
+  const history = await db.all(`SELECT amount, status, created_at FROM donations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`, [ctx.from.id]);
+  let text = `📦 <b>My Donation Portfolio</b>\n\n✅ Verified: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n<b>Recent History:</b>\n`;
+  history.forEach(d => {
+    const icon = d.status === 'approved' ? '✅' : '⏳';
+    text += `${icon} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`;
+  });
+  await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
 // Start Procedure
@@ -336,7 +379,7 @@ bot.action(/reject_(\d+)/, async (ctx) => {
     await initScheduler(bot.telegram);
     bot.launch();
     console.log('🏛 Mission Portal Active (Postgres)');
-  } catch (e) { console.error('Launch Failed:', e.message); }
+  } catch (e) { console.error('🔴 Launch Failed:', e.message); }
 })();
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
