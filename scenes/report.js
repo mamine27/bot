@@ -5,38 +5,66 @@ const { getSettings } = require('../utils');
 
 const reportScene = new Scenes.WizardScene(
   'REPORT_DONATION_SCENE',
+  // Step 1: Show Banks & Ask for Amount
   async (ctx) => {
     const user = await db.get('SELECT language FROM users WHERE id = $1', [ctx.from.id]);
     ctx.wizard.state.lang = user?.language || 'en';
     const l = locales[ctx.wizard.state.lang];
+
+    // Check for existing bank info
+    const bankDetails = await getSettings('BANK_DETAILS', 'No bank accounts configured yet.');
     
-    await ctx.reply(l.report_init, { parse_mode: 'HTML' });
+    await ctx.reply(l.bank_info_header + `<code>${bankDetails}</code>`, { parse_mode: 'HTML' });
+    await ctx.reply(l.report_init, { 
+      parse_mode: 'HTML',
+      ...Markup.keyboard([[l.btn_cancel]]).resize()
+    });
     return ctx.wizard.next();
   },
+  // Step 2: Handle Amount / Cancel
   async (ctx) => {
-    if (!ctx.message || !ctx.message.text) return;
     const l = locales[ctx.wizard.state.lang];
-    
-    if (ctx.message.text.startsWith('/')) return ctx.reply(l.report_init);
+    const text = ctx.message?.text;
 
-    const amount = parseFloat(ctx.message.text.trim());
-    if (isNaN(amount) || amount <= 0) return ctx.reply(l.report_init);
+    if (text === '/cancel' || text === l.btn_cancel || text?.includes('Cancel')) {
+      await ctx.reply(l.msg_cancel, Markup.keyboard([
+        [l.btn_donate],
+        [l.btn_progress, l.btn_top_donors],
+        [l.btn_my_history]
+      ]).resize());
+      return ctx.scene.leave();
+    }
+
+    if (!text || isNaN(parseFloat(text.trim()))) {
+      return ctx.reply(l.report_init);
+    }
+
+    const amount = parseFloat(text.trim());
+    if (amount <= 0) return ctx.reply(l.report_init);
     
     ctx.wizard.state.amount = amount;
     await ctx.reply(l.report_receipt, { 
       parse_mode: 'HTML', 
-      ...Markup.keyboard([l.btn_cancel.split(' / ')[0]]).oneTime().resize() 
+      ...Markup.keyboard([[l.btn_cancel]]).resize() 
     });
     return ctx.wizard.next();
   },
+  // Step 3: Handle Receipt / Cancel
   async (ctx) => {
     const l = locales[ctx.wizard.state.lang];
-    const text = ctx.message.text ? ctx.message.text.toLowerCase().trim() : null;
+    const text = ctx.message?.text;
+
+    if (text === '/cancel' || text === l.btn_cancel || text?.includes('Cancel')) {
+      await ctx.reply(l.msg_cancel, Markup.keyboard([
+        [l.btn_donate],
+        [l.btn_progress, l.btn_top_donors],
+        [l.btn_my_history]
+      ]).resize());
+      return ctx.scene.leave();
+    }
 
     if (ctx.message.photo) {
       ctx.wizard.state.proof_file_id = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-    } else if (text && text.startsWith('/')) {
-      return ctx.reply(l.report_receipt);
     } else {
       return ctx.reply(l.report_receipt);
     }
@@ -72,8 +100,7 @@ const reportScene = new Scenes.WizardScene(
           [Markup.button.callback('✅ Approve', `approve_${donationId}`), Markup.button.callback('❌ Reject', `reject_${donationId}`)]
         ]);
 
-        if (proof_file_id) await ctx.telegram.sendPhoto(targetId, proof_file_id, { caption, parse_mode: 'HTML', ...buttons });
-        else await ctx.telegram.sendMessage(targetId, caption, { parse_mode: 'HTML', ...buttons });
+        await ctx.telegram.sendPhoto(targetId, proof_file_id, { caption, parse_mode: 'HTML', ...buttons });
       };
 
       const groupId = await getSettings('REPORT_GROUP_ID');

@@ -13,7 +13,7 @@ const stage = new Scenes.Stage([reportScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-// Language Middleware (Helper to get user lang)
+// Language Middleware
 async function getUserLang(ctx) {
   const user = await db.get('SELECT language FROM users WHERE id = $1', [ctx.from.id]);
   return user?.language || 'en';
@@ -32,7 +32,7 @@ async function updateCommands(tg, userId, role) {
     ];
 
     if (role === 'superadmin' || role === 'collector') {
-      commands.push({ command: 'admin_panel', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' });
+      commands.push({ command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' });
     }
     
     await tg.setMyCommands(commands, {
@@ -115,6 +115,7 @@ bot.start(async (ctx) => {
   await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
 });
 
+// Dynamic Button Handlers
 const donateButtons = [locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'];
 bot.hears(donateButtons, (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE'));
 
@@ -139,8 +140,7 @@ bot.hears(progressButtons, async (ctx) => {
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-const leaderboardButtons = [locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'];
-bot.hears(leaderboardButtons, async (ctx) => {
+bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'], async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
   const donors = await db.all(`
@@ -178,7 +178,15 @@ bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donati
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-// Admin Commands
+// 🏦 Bank Detail Command (SuperAdmin Only)
+bot.command('set_bank', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const details = ctx.message.text.split('\n').slice(1).join('\n');
+  if (!details) return ctx.reply('📑 <b>Usage:</b>\n/set_bank\nBank Name: [Name]\nAcc: [Number]\n...', { parse_mode: 'HTML' });
+  await setSetting('BANK_DETAILS', details);
+  await ctx.reply('✅ <b>Bank Information Updated.</b> Donors will now see these details when reporting a donation.', { parse_mode: 'HTML' });
+});
+
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
@@ -194,7 +202,7 @@ bot.command('set_public_channel', async (ctx) => {
   await updatePublicStatus(ctx.telegram);
 });
 
-bot.command('admin_panel', async (ctx) => {
+bot.command('admin_hub', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const pending = await db.get("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
   await ctx.reply(`🛠 Admin Hub\nPending: ${pending.count}`);
