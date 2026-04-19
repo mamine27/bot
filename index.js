@@ -202,21 +202,21 @@ bot.command('my_links', async (ctx) => {
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${userId}`;
   
-  let text = `🏮 <b>Yad Al-Awn | Collector Passport</b>\n\n` +
-             `👤 <b>Steward:</b> ${admin.name || ctx.from.first_name}\n` +
+  let text = `🏮 <b>Yad Al-Awn | Your Invite Link</b>\n\n` +
+             `👤 <b>Collector:</b> ${admin.name || ctx.from.first_name}\n` +
              `🚀 <b>Status:</b> Active\n\n` +
-             `<b>Bilingual Share Message / የማጋሪያ መልዕክት:</b>\n` +
+             `<b>You can copy and share the message below:</b>\n` +
              `--------------------------------\n` +
-             `<i>"Support the mission of Yad Al-Awn through this official link. Every donation becomes a sacred trust."</i>\n\n` +
-             `<i>"በዚህ ይፋዊ ሊንክ የያድ አል-አውንን ተልእኮ ይደግፉ። እያንዳንዱ ልገሳ ትልቅ አደራ ይሆናል።"</i>\n` +
+             `<i>We invite you to support the Yad Al-Awn charity mission. Together we can make a difference! You can donate easily using the link below.</i>\n\n` +
+             `<i>የያድ አል-አውንን በጎ አድራጎት አላማ እንዲደግፉ በአክብሮት እንጠይቃለን። አብረን በመሆን ትልቅ ለውጥ ማምጣት እንችላለን! ከታች ያለውን ሊንክ በመጠቀም በቀላሉ ልገሳ ማድረግ ይችላሉ።</i>\n` +
              `--------------------------------\n\n` +
              `👇 <b>Your Unique Link / የእርስዎ ልዩ ሊንክ:</b>\n` +
              `<code>${link}</code>\n\n` +
-             `<i>Tip: Tap the link above to copy, then share it in groups or your bio!</i>`;
+             `<i>Tip: Tap the link above to copy it instantly!</i>`;
 
   await ctx.reply(text, {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open & Share Link', link)]])
+    ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open Link', link)]])
   });
 });
 
