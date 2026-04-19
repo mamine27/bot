@@ -35,26 +35,23 @@ async function updatePublicStatus(tg) {
   if (!goal || !channelId) return;
 
   const stats = await db.get("SELECT SUM(amount) as total FROM donations WHERE status = 'approved'");
-  const total = stats.total || 0;
+  const total = parseFloat(stats.total || 0);
   const percent = Math.min(100, (total / goal) * 100);
 
   const topDonations = await db.all(`
-    SELECT SUM(amount) as total
-    FROM donations
-    WHERE status = 'approved'
-    GROUP BY user_id
-    ORDER BY total DESC
-    LIMIT 5
+    SELECT SUM(amount) as total FROM donations
+    WHERE status = 'approved' GROUP BY user_id
+    ORDER BY total DESC LIMIT 5
   `);
 
-  let text = `<b>🌟 MISSION OPERATIONAL DASHBOARD</b>\n\n` +
-             `Our objective is to raise <b>${goal.toLocaleString()} ETB</b>. Every contribution accelerates our collective impact!\n\n` +
+  let text = `🌟 <b>YAD AL-AWN | STRATEGIC IMPACT DASHBOARD</b>\n\n` +
+             `Our collective objective is to fulfill our sacred mission. Every <i>Sadaqah</i> entrusted to us accelerates our community impact!\n\n` +
              `<code>${getProgressBar(percent)}</code>\n\n` +
-             `💰 Capital Secured: <b>${total.toLocaleString()} ETB</b>\n` +
-             `🎯 Target Objective: <b>${goal.toLocaleString()} ETB</b>\n\n`;
+             `💰 Capital Entrusted: <b>${total.toLocaleString()} ETB</b>\n` +
+             `🎯 Mission Objective: <b>${goal.toLocaleString()} ETB</b>\n\n`;
 
   if (topDonations.length > 0) {
-    text += `<b>🌟 Top Impact Contributions:</b>\n`;
+    text += `<b>🌟 Distinguished Impact Pioneers:</b>\n`;
     topDonations.forEach((d, i) => {
       const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '🔹'));
       text += `${medal} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`;
@@ -63,9 +60,9 @@ async function updatePublicStatus(tg) {
   }
 
   const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  text += `🙏 Thank you for your commitment.\n` +
-          `🕒 <i>Last Synchronized: ${now} [Live Update]</i>\n\n` +
-          `Select @your_bot_username to participate.`;
+  text += `🙏 Thank you for your commitment to the Yad Al-Awn mission.\n` +
+          `🕒 <i>Operational Synchronization: ${now} [Live]</i>\n\n` +
+          `Select @your_bot_username to contribute.`;
 
   if (messageId) {
     try {
