@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Keeping the mission alive. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Zero-Failure Logic Active. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -23,10 +23,19 @@ const stage = new Scenes.Stage([reportScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-// Language Middleware
+// --- 🏛️ UI FACTORY (Centralized Keyboard Management) ---
 async function getUserLang(ctx) {
   const user = await db.get('SELECT language FROM users WHERE id = $1', [ctx.from.id]);
   return user?.language || 'en';
+}
+
+function getMainKeyboard(lang) {
+  const l = locales[lang];
+  return Markup.keyboard([
+    [l.btn_donate],
+    [l.btn_progress, l.btn_top_donors],
+    [l.btn_my_history]
+  ]).resize();
 }
 
 async function updateCommands(tg, userId, role) {
@@ -40,20 +49,15 @@ async function updateCommands(tg, userId, role) {
       { command: 'language', description: 'Change Language / ቋንቋ ቀይር' },
       { command: 'cancel', description: 'Cancel / ሰርዝ' }
     ];
-
     if (role === 'superadmin' || role === 'collector') {
       commands.push({ command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' });
     }
-    
-    await tg.setMyCommands(commands, {
-      scope: { type: 'chat', chat_id: userId }
-    });
-  } catch (e) {
-    console.error(`Failed to set commands for ${userId}:`, e.message);
-  }
+    await tg.setMyCommands(commands, { scope: { type: 'chat', chat_id: userId } });
+  } catch (e) { console.error(`Failed to set commands for ${userId}:`, e.message); }
 }
 
-// 🌍 Language Toggle
+// --- 🌍 CORE HANDLERS ---
+
 const langHandler = async (ctx) => {
   await ctx.reply(locales.en.select_language + "\n" + locales.am.select_language, Markup.inlineKeyboard([
     [Markup.button.callback('🇺🇸 English', 'lang_en'), Markup.button.callback('🇪🇹 አማርኛ', 'lang_am')]
@@ -65,10 +69,9 @@ bot.action(/lang_(en|am)/, async (ctx) => {
   const lang = ctx.match[1];
   const userId = ctx.from.id;
   await db.query(`INSERT INTO users (id, username, language) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET language = $3`, [userId, ctx.from.username || ctx.from.first_name, lang]);
-  await ctx.answerCbQuery(lang === 'en' ? 'Language optimized to English.' : 'ቋንቋ ወደ አማርኛ ተቀይሯል።');
+  await ctx.answerCbQuery(lang === 'en' ? 'Language saved.' : 'ቋንቋ ተቀምጧል።');
   const l = locales[lang];
-  const keyboard = Markup.keyboard([[l.btn_donate], [l.btn_progress, l.btn_top_donors], [l.btn_my_history]]).resize();
-  await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
+  await ctx.reply(l.welcome, { parse_mode: 'HTML', ...getMainKeyboard(lang) });
   const admin = await db.get('SELECT role FROM admins WHERE id = $1', [userId]);
   await updateCommands(ctx.telegram, userId, admin?.role || 'user');
 });
@@ -85,37 +88,29 @@ bot.start(async (ctx) => {
   }
 
   const lang = user.language || 'en';
-  const l = locales[lang];
   const activePayload = payload || ctx.session.startPayload;
 
-  // Handle Admin Invites
-  if (activePayload && activePayload.startsWith('invite_')) {
+  if (activePayload?.startsWith('invite_')) {
     const token = activePayload.replace('invite_', '');
     const invite = await db.get('SELECT * FROM admin_invites WHERE token = $1', [token]);
-    if (invite) {
-      await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET role = $4', [userId, ctx.from.username, username, invite.role]);
-    }
+    if (invite) await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET role = $4', [userId, ctx.from.username, username, invite.role]);
   } else if (activePayload) {
     const admin = await db.get('SELECT id FROM admins WHERE id::text = $1 OR username = $1', [activePayload]);
     if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
   }
   ctx.session.startPayload = null;
 
-  // 🛡️ ALWAYS REFRESH ROLE & COMMANDS ON START
   const adminEntry = await db.get('SELECT role FROM admins WHERE id = $1', [userId]);
-  const role = adminEntry?.role || 'user';
-  await updateCommands(ctx.telegram, userId, role);
-
-  const keyboard = Markup.keyboard([[l.btn_donate], [l.btn_progress, l.btn_top_donors], [l.btn_my_history]]).resize();
-  await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
+  await updateCommands(ctx.telegram, userId, adminEntry?.role || 'user');
+  await ctx.reply(locales[lang].welcome, { parse_mode: 'HTML', ...getMainKeyboard(lang) });
 });
 
-// 💰 DONATE Logic
+// 💰 DONATE Flow
 const donateHandler = (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE');
 bot.command('donate', donateHandler);
 bot.hears([locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'], donateHandler);
 
-// 📊 PROGRESS Logic
+// 📊 PROGRESS Flow
 const progressHandler = async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
@@ -133,7 +128,7 @@ const progressHandler = async (ctx) => {
 bot.command('progress', progressHandler);
 bot.hears([locales.en.btn_progress, locales.am.btn_progress, '📊 Mission Progress', '📊 Check Progress'], progressHandler);
 
-// 🌟 TOP DONORS Logic
+// 🌟 TOP CONTRIBUTORS Flow
 const topDonorsHandler = async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
@@ -149,36 +144,43 @@ const topDonorsHandler = async (ctx) => {
 bot.command('top_donors', topDonorsHandler);
 bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'], topDonorsHandler);
 
-// 📦 MY HISTORY Logic
+// 📦 HISTORY Flow
 const historyHandler = async (ctx) => {
-  const lang = await getUserLang(ctx);
-  const l = locales[lang];
-  const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [ctx.from.id]);
-  if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty);
-  const history = await db.all(`SELECT amount, status, created_at FROM donations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`);
-  let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
-  history.forEach(d => {
-    const icon = d.status === 'approved' ? '✅' : '⏳';
-    text += `${icon} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`;
-  });
-  await ctx.reply(text, { parse_mode: 'HTML' });
+  try {
+    const lang = await getUserLang(ctx);
+    const l = locales[lang];
+    const userId = ctx.from.id;
+    const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [userId]);
+    if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty);
+    const history = await db.all(`SELECT amount, status, created_at FROM donations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`, [userId]);
+    let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
+    history.forEach(d => {
+      const icon = d.status === 'approved' ? '✅' : '⏳';
+      text += `${icon} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`;
+    });
+    await ctx.reply(text, { parse_mode: 'HTML' });
+  } catch (e) {
+    console.error('History Handler Error:', e.message);
+    await ctx.reply('❌ System Error.');
+  }
 };
 bot.command('my_history', historyHandler);
 bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donation Portfolio', '📦 My Contribution History'], historyHandler);
 
-// Admin Commands
+// --- 🛠 ADMINISTRATIVE FLOWS ---
+
 bot.command('set_bank', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const details = ctx.message.text.split('\n').slice(1).join('\n');
-  if (!details) return ctx.reply('📑 <b>Usage:</b>\n/set_bank\nBank Name: [Name]\nAcc: [Number]\n...', { parse_mode: 'HTML' });
+  if (!details) return ctx.reply('📑 Usage: /set_bank\n[Details]');
   await setSetting('BANK_DETAILS', details);
-  await ctx.reply('✅ <b>Bank Information Updated.</b>', { parse_mode: 'HTML' });
+  await ctx.reply('✅ Bank Information Updated.');
 });
 
 bot.command('admin_hub', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const pending = await db.get("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
-  await ctx.reply(`🛠 Admin Hub\nPending: ${pending.count}`);
+  await ctx.reply(`🛠 <b>Admin Hub</b>\nPending Verifications: <b>${pending.count}</b>`, { parse_mode: 'HTML' });
 });
 
 bot.action(/approve_(\d+)/, async (ctx) => {
@@ -190,10 +192,9 @@ bot.action(/approve_(\d+)/, async (ctx) => {
   await updatePublicStatus(ctx.telegram);
   const donor = await db.get('SELECT language FROM users WHERE id = $1', [donation.user_id]);
   const lang = donor?.language || 'en';
-  const msg = ctx.callbackQuery.message;
   const statusText = '\n\n✅ <b>APPROVED / ጸድቋል</b>';
-  if (msg.photo) await ctx.editMessageCaption((msg.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
-  else await ctx.editMessageText((msg.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  if (ctx.callbackQuery.message.photo) await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  else await ctx.editMessageText((ctx.callbackQuery.message.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
   await ctx.telegram.sendMessage(donation.user_id, locales[lang].action_approved, { parse_mode: 'HTML' }).catch(()=>{});
 });
 
@@ -204,20 +205,31 @@ bot.action(/reject_(\d+)/, async (ctx) => {
   await db.query("UPDATE donations SET status = 'rejected', approved_by = $1 WHERE id = $2", [ctx.from.id, id]);
   const donor = await db.get('SELECT language FROM users WHERE id = $1', [donation.user_id]);
   const lang = donor?.language || 'en';
-  const msg = ctx.callbackQuery.message;
   const statusText = '\n\n❌ <b>REJECTED / ውድቅ ተደርጓል</b>';
-  if (msg.photo) await ctx.editMessageCaption((msg.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
-  else await ctx.editMessageText((msg.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  if (ctx.callbackQuery.message.photo) await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  else await ctx.editMessageText((ctx.callbackQuery.message.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
   await ctx.telegram.sendMessage(donation.user_id, locales[lang].action_rejected, { parse_mode: 'HTML' }).catch(()=>{});
 });
 
 bot.command('cancel', async (ctx) => {
   const lang = await getUserLang(ctx);
-  await ctx.reply(locales[lang].msg_cancel, Markup.keyboard([[locales[lang].btn_donate], [locales[lang].btn_progress, locales[lang].btn_top_donors]]).resize());
+  await ctx.reply(locales[lang].msg_cancel, { ...getMainKeyboard(lang) });
   return ctx.scene.leave();
 });
 
-// Admin Core
+bot.command('broadcast', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const msg = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!msg) return ctx.reply('Usage: /broadcast <message>');
+  const users = await db.all('SELECT id, language FROM users');
+  for (const u of users) {
+    const header = u.language === 'am' ? '📢 <b>መልዕክት</b>' : '📢 <b>Announcement</b>';
+    await ctx.telegram.sendMessage(u.id, `${header}\n\n${msg}`, { parse_mode: 'HTML' }).catch(()=>{});
+  }
+  await ctx.reply(`✅ Broadcast complete.`);
+});
+
+// --- ADMIN SYSTEM CONFIG ---
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
@@ -231,17 +243,6 @@ bot.command('set_public_channel', async (ctx) => {
   await ctx.reply(`📢 Dashboard Connected.`);
   await updatePublicStatus(ctx.telegram);
 });
-bot.command('broadcast', async (ctx) => {
-  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  const msg = ctx.message.text.split(' ').slice(1).join(' ');
-  if (!msg) return ctx.reply('Usage: /broadcast <message>');
-  const users = await db.all('SELECT id, language FROM users');
-  for (const u of users) {
-    const header = u.language === 'am' ? '📢 <b>መልዕክት</b>' : '📢 <b>Announcement</b>';
-    await ctx.telegram.sendMessage(u.id, `${header}\n\n${msg}`, { parse_mode: 'HTML' }).catch(()=>{});
-  }
-  await ctx.reply(`✅ Broadcast complete.`);
-});
 
 // Start Procedure
 (async () => {
@@ -251,6 +252,6 @@ bot.command('broadcast', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (Role Resilience Enabled)');
+    console.log('🏛 Yad Al-Awn Portal Active (Zero-Failure Restoration Complete)');
   } catch (e) { console.error('Launch Failed:', e.message); }
 })();
