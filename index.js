@@ -54,7 +54,6 @@ bot.action(/lang_(en|am)/, async (ctx) => {
   const lang = ctx.match[1];
   const userId = ctx.from.id;
   
-  // Update or insert with language
   await db.query(`
     INSERT INTO users (id, username, language) 
     VALUES ($1, $2, $3) 
@@ -81,7 +80,6 @@ bot.start(async (ctx) => {
   const username = ctx.from.username || ctx.from.first_name;
   const payload = ctx.startPayload;
 
-  // Check if they need language selection
   const user = await db.get('SELECT language FROM users WHERE id = $1', [userId]);
   if (!user || !user.language) {
     if (payload) ctx.session.startPayload = payload;
@@ -93,7 +91,6 @@ bot.start(async (ctx) => {
   const lang = user.language || 'en';
   const l = locales[lang];
 
-  // Post-Migration: Handle Referrals/Invites
   const activePayload = payload || ctx.session.startPayload;
   if (activePayload && activePayload.startsWith('invite_')) {
     const token = activePayload.replace('invite_', '');
@@ -118,7 +115,6 @@ bot.start(async (ctx) => {
   await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
 });
 
-// Dynamic Button Handlers + 🛡️ LEGACY SUPPORT
 const donateButtons = [locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'];
 bot.hears(donateButtons, (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE'));
 
@@ -215,8 +211,17 @@ bot.action(/approve_(\d+)/, async (ctx) => {
   
   const donor = await db.get('SELECT language FROM users WHERE id = $1', [donation.user_id]);
   const lang = donor?.language || 'en';
+  
+  const msg = ctx.callbackQuery.message;
+  const statusText = '\n\n✅ <b>APPROVED / ጸድቋል</b>';
+  
+  if (msg.photo) {
+    await ctx.editMessageCaption((msg.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  } else {
+    await ctx.editMessageText((msg.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  }
+
   await ctx.telegram.sendMessage(donation.user_id, locales[lang].action_approved, { parse_mode: 'HTML' }).catch(()=>{});
-  await ctx.editMessageText('✅ Approved');
 });
 
 bot.action(/reject_(\d+)/, async (ctx) => {
@@ -227,8 +232,17 @@ bot.action(/reject_(\d+)/, async (ctx) => {
   
   const donor = await db.get('SELECT language FROM users WHERE id = $1', [donation.user_id]);
   const lang = donor?.language || 'en';
+  
+  const msg = ctx.callbackQuery.message;
+  const statusText = '\n\n❌ <b>REJECTED / ውድቅ ተደርጓል</b>';
+  
+  if (msg.photo) {
+    await ctx.editMessageCaption((msg.caption || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  } else {
+    await ctx.editMessageText((msg.text || '') + statusText, { parse_mode: 'HTML' }).catch(()=>{});
+  }
+  
   await ctx.telegram.sendMessage(donation.user_id, locales[lang].action_rejected, { parse_mode: 'HTML' }).catch(()=>{});
-  await ctx.editMessageText('❌ Rejected');
 });
 
 bot.command('cancel', async (ctx) => {
