@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Active</h1><p>Growth Matrix Operational. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Active</h1><p>Passport Engine Running. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -53,20 +53,14 @@ async function updateCommands(tg, userId, role) {
       commands.push(
         { command: 'admin_hub', description: 'Admin Hub' },
         { command: 'my_links', description: 'My Invite Link' },
-        { command: 'my_stats', description: 'My Stats' },
-        { command: 'history_all', description: 'Global History' },
-        { command: 'view', description: 'View Donation' }
+        { command: 'my_stats', description: 'My Stats' }
       );
     }
     if (role === 'superadmin') {
       commands.push(
         { command: 'admin_stats', description: 'Team Growth Report' },
         { command: 'broadcast', description: 'Announcement' },
-        { command: 'generate_invite', description: 'Add Admin' },
-        { command: 'demote', description: 'Remove Access' },
-        { command: 'set_bank', description: 'Bank Settings' },
-        { command: 'set_goal', description: 'Set Goal' },
-        { command: 'hard_reset', description: 'WIPE DATA' }
+        { command: 'generate_invite', description: 'Add Admin' }
       );
     }
     await tg.setMyCommands(commands, { scope: { type: 'chat', chat_id: userId } });
@@ -127,29 +121,52 @@ bot.command('admin_stats', async (ctx) => {
            (SELECT COUNT(*) FROM donations d WHERE d.approved_by = a.id AND d.status = 'approved') as verified_count,
            (SELECT SUM(amount) FROM donations d WHERE d.approved_by = a.id AND d.status = 'approved') as verified_value,
            (SELECT COUNT(*) FROM users u WHERE u.collector_id = a.id) as people_added,
-           (SELECT COUNT(DISTINCT u.id) FROM users u 
-            JOIN donations ud ON u.id = ud.user_id 
-            WHERE u.collector_id = a.id AND ud.status = 'approved') as donors_converted
-    FROM admins a
-    ORDER BY verified_value DESC
+           (SELECT COUNT(DISTINCT u.id) FROM users u JOIN donations ud ON u.id = ud.user_id WHERE u.collector_id = a.id AND ud.status = 'approved') as donors_converted
+    FROM admins a ORDER BY verified_value DESC
   `);
-
-  let text = `📈 <b>Team Growth & Conversion Report</b>\n\n`;
-  if (stats.length === 0) text += `<i>No admin activity.</i>`;
-  else {
-    stats.forEach(s => {
-      const added = parseInt(s.people_added || 0);
-      const converted = parseInt(s.donors_converted || 0);
-      const percent = added > 0 ? ((converted / added) * 100).toFixed(1) : '0';
-      
-      text += `👤 <b>${s.name || s.username || 'System'}</b>\n` +
-              `🛠 Verified: <b>${s.verified_count || 0}</b> (${parseFloat(s.verified_value || 0).toLocaleString()} ETB)\n` +
-              `🤝 Recruited: <b>${added}</b> members\n` +
-              `🎯 Converted: <b>${converted}</b> donors (<b>${percent}%</b>)\n\n`;
-    });
-  }
+  let text = `📈 <b>Team Analysis</b>\n\n`;
+  stats.forEach(s => {
+    const added = parseInt(s.people_added || 0); const converted = parseInt(s.donors_converted || 0);
+    const percent = added > 0 ? ((converted / added) * 100).toFixed(1) : '0';
+    text += `👤 <b>${s.name || s.username || 'System'}</b>\n` +
+            `🛠 Approved: <b>${s.verified_count || 0}</b> (${parseFloat(s.verified_value || 0).toLocaleString()} ETB)\n` +
+            `🤝 Recruited: <b>${added}</b> | 🎯 Conversion: <b>${percent}%</b>\n\n`;
+  });
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
+
+// --- 🤝 UPDATED COLLECTOR LINKS ---
+
+bot.command('my_links', async (ctx) => {
+  const userId = ctx.from.id;
+  const admin = await db.get('SELECT name FROM admins WHERE id = $1', [userId]);
+  if (!admin) return ctx.reply('Unauthorized.');
+  
+  const botInfo = await ctx.telegram.getMe();
+  const link = `https://t.me/${botInfo.username}?start=${userId}`;
+  const lang = await getUserLang(ctx);
+  
+  let text = `🏮 <b>Yad Al-Awn | Collector Passport</b>\n\n` +
+             `👤 <b>Steward:</b> ${admin.name || ctx.from.first_name}\n` +
+             `🚀 <b>Status:</b> Active\n\n` +
+             `<b>Bilingual Share Message / የማጋሪያ መልዕክት:</b>\n` +
+             `--------------------------------\n` +
+             `<i>"Support the mission of Yad Al-Awn through this official link. Every donation becomes a sacred trust."</i>\n\n` +
+             `<i>"በዚህ ይፋዊ ሊንክ የያድ አል-አውንን ተልእኮ ይደግፉ። እያንዳንዱ ልገሳ ትልቅ አደራ ይሆናል።"</i>\n` +
+             `--------------------------------\n\n` +
+             `👇 <b>Your Unique Link / የእርስዎ ልዩ ሊንክ:</b>\n` +
+             `<code>${link}</code>\n\n` +
+             `<i>Tip: Tap the link above to copy, then share it in groups or your bio!</i>`;
+
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([
+      [Markup.button.url('🚀 Open & Share Link', link)]
+    ])
+  });
+});
+
+// --- Other Tools ---
 
 bot.command('view', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
@@ -166,13 +183,6 @@ bot.command('admin_hub', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const pending = await db.get("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
   await ctx.reply(`🛠 Admin Hub\nPending: ${pending.count}`);
-});
-
-bot.command('my_links', async (ctx) => {
-  if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  const botInfo = await ctx.telegram.getMe();
-  const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
-  await ctx.reply(`🔗 <b>My Invite Link:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open Link', link)]]) });
 });
 
 bot.command('my_stats', async (ctx) => {
@@ -227,6 +237,6 @@ bot.command('broadcast', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (Growth Analysis Integrated)');
+    console.log('🏛 Yad Al-Awn Portal Active (Passport Restored)');
   } catch (e) { console.error('Launch!', e.message); }
 })();
