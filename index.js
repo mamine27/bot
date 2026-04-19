@@ -81,9 +81,12 @@ async function updateCommands(tg, userId, role) {
 
 // --- 🌍 CORE HANDLERS ---
 const langHandler = async (ctx) => {
-  await ctx.reply(locales.en.select_language + "\n" + locales.am.select_language, Markup.inlineKeyboard([
-    [Markup.button.callback('🇺🇸 English', 'lang_en'), Markup.button.callback('🇪🇹 አማርኛ', 'lang_am')]
-  ]));
+  await ctx.reply(locales.en.select_language + "\n" + locales.am.select_language, {
+    parse_mode: 'HTML',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('🇺🇸 English', 'lang_en'), Markup.button.callback('🇪🇹 አማርኛ', 'lang_am')]
+    ])
+  });
 };
 bot.command('language', langHandler);
 

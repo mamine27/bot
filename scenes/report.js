@@ -36,11 +36,11 @@ const reportScene = new Scenes.WizardScene(
     }
 
     if (!text || isNaN(parseFloat(text.trim()))) {
-      return ctx.reply(l.report_init);
+      return ctx.reply(l.report_init, { parse_mode: 'HTML' });
     }
 
     const amount = parseFloat(text.trim());
-    if (amount <= 0) return ctx.reply(l.report_init);
+    if (amount <= 0) return ctx.reply(l.report_init, { parse_mode: 'HTML' });
     
     ctx.wizard.state.amount = amount;
     await ctx.reply(l.report_receipt, { 
@@ -66,7 +66,7 @@ const reportScene = new Scenes.WizardScene(
     if (ctx.message.photo) {
       ctx.wizard.state.proof_file_id = ctx.message.photo[ctx.message.photo.length - 1].file_id;
     } else {
-      return ctx.reply(l.report_receipt);
+      return ctx.reply(l.report_receipt, { parse_mode: 'HTML' });
     }
 
     const { amount, proof_file_id } = ctx.wizard.state;
@@ -84,11 +84,14 @@ const reportScene = new Scenes.WizardScene(
       const res = await db.query(`INSERT INTO donations (user_id, amount, proof_file_id, status, collector_id) VALUES ($1, $2, $3, 'pending', $4) RETURNING id`, [userId, amount, proof_file_id, collectorId]);
       const donationId = res.rows[0].id;
 
-      await ctx.reply(l.report_success, Markup.keyboard([
-        [l.btn_donate],
-        [l.btn_progress, l.btn_top_donors],
-        [l.btn_my_history]
-      ]).resize());
+      await ctx.reply(l.report_success, {
+        parse_mode: 'HTML',
+        ...Markup.keyboard([
+          [l.btn_donate],
+          [l.btn_progress, l.btn_top_donors],
+          [l.btn_my_history]
+        ]).resize()
+      });
 
       const sendReport = async (targetId) => {
         const caption = `<b>🆕 Yad Al-Awn | Verification Required</b>\n` +
