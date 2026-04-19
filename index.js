@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
+const http = require('http');
 const { db, initDB } = require('./database');
 const locales = require('./locales');
 const reportScene = require('./scenes/report');
@@ -7,6 +8,15 @@ const { isAdmin, isSuperAdmin, setSetting, getSettings, updatePublicStatus } = r
 const { initScheduler } = require('./scheduler');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
+
+// 🏥 Render Heartbeat Server
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Keeping the mission alive. 🏮</p>');
+}).listen(PORT, () => {
+  console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
+});
 
 // Middleware
 const stage = new Scenes.Stage([reportScene]);
@@ -115,7 +125,6 @@ bot.start(async (ctx) => {
   await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
 });
 
-// Dynamic Button Handlers
 const donateButtons = [locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'];
 bot.hears(donateButtons, (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE'));
 
@@ -140,7 +149,8 @@ bot.hears(progressButtons, async (ctx) => {
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'], async (ctx) => {
+const leaderboardButtons = [locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'];
+bot.hears(leaderboardButtons, async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
   const donors = await db.all(`
@@ -178,13 +188,13 @@ bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donati
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-// 🏦 Bank Detail Command (SuperAdmin Only)
+// Admin Commands
 bot.command('set_bank', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const details = ctx.message.text.split('\n').slice(1).join('\n');
   if (!details) return ctx.reply('📑 <b>Usage:</b>\n/set_bank\nBank Name: [Name]\nAcc: [Number]\n...', { parse_mode: 'HTML' });
   await setSetting('BANK_DETAILS', details);
-  await ctx.reply('✅ <b>Bank Information Updated.</b> Donors will now see these details when reporting a donation.', { parse_mode: 'HTML' });
+  await ctx.reply('✅ <b>Bank Information Updated.</b>', { parse_mode: 'HTML' });
 });
 
 bot.command('set_group', async (ctx) => {
