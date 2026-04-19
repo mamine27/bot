@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Zero-Failure Logic Active. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Executive Dashboard Active. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -23,7 +23,7 @@ const stage = new Scenes.Stage([reportScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
-// --- 🏛️ UI FACTORY (Centralized Keyboard Management) ---
+// --- 🏛️ UI FACTORY ---
 async function getUserLang(ctx) {
   const user = await db.get('SELECT language FROM users WHERE id = $1', [ctx.from.id]);
   return user?.language || 'en';
@@ -49,9 +49,21 @@ async function updateCommands(tg, userId, role) {
       { command: 'language', description: 'Change Language / ቋንቋ ቀይር' },
       { command: 'cancel', description: 'Cancel / ሰርዝ' }
     ];
-    if (role === 'superadmin' || role === 'collector') {
-      commands.push({ command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' });
+
+    // Expanded SuperAdmin Menu
+    if (role === 'superadmin') {
+      commands.push(
+        { command: 'admin_hub', description: 'Admin Stats / የአስተዳዳሪ ሁኔታ' },
+        { command: 'broadcast', description: 'Send Announcement / መልዕክት ላክ' },
+        { command: 'generate_invite', description: 'Invite Collector / ሰብሳቢ ጋብዝ' },
+        { command: 'set_bank', description: 'Update Bank Details / ባንክ ቀይር' },
+        { command: 'set_group', description: 'Connect Report Group / ግሩፕ አገናኝ' },
+        { command: 'set_public_channel', description: 'Connect Public Channel / ቻናል አገናኝ' }
+      );
+    } else if (role === 'collector') {
+      commands.push({ command: 'admin_hub', description: 'My Collector Stats / የልገሳ ስታቲስቲክስ' });
     }
+    
     await tg.setMyCommands(commands, { scope: { type: 'chat', chat_id: userId } });
   } catch (e) { console.error(`Failed to set commands for ${userId}:`, e.message); }
 }
@@ -105,12 +117,11 @@ bot.start(async (ctx) => {
   await ctx.reply(locales[lang].welcome, { parse_mode: 'HTML', ...getMainKeyboard(lang) });
 });
 
-// 💰 DONATE Flow
+// Standard Features
 const donateHandler = (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE');
 bot.command('donate', donateHandler);
 bot.hears([locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'], donateHandler);
 
-// 📊 PROGRESS Flow
 const progressHandler = async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
@@ -128,7 +139,6 @@ const progressHandler = async (ctx) => {
 bot.command('progress', progressHandler);
 bot.hears([locales.en.btn_progress, locales.am.btn_progress, '📊 Mission Progress', '📊 Check Progress'], progressHandler);
 
-// 🌟 TOP CONTRIBUTORS Flow
 const topDonorsHandler = async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
@@ -144,7 +154,6 @@ const topDonorsHandler = async (ctx) => {
 bot.command('top_donors', topDonorsHandler);
 bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'], topDonorsHandler);
 
-// 📦 HISTORY Flow
 const historyHandler = async (ctx) => {
   try {
     const lang = await getUserLang(ctx);
@@ -167,7 +176,16 @@ const historyHandler = async (ctx) => {
 bot.command('my_history', historyHandler);
 bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donation Portfolio', '📦 My Contribution History'], historyHandler);
 
-// --- 🛠 ADMINISTRATIVE FLOWS ---
+// --- 👑 EXECUTIVE TOOLS ---
+
+bot.command('generate_invite', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const token = Math.random().toString(36).substring(2, 10);
+  await db.query('INSERT INTO admin_invites (token, role) VALUES ($1, $2)', [token, 'collector']);
+  const botInfo = await ctx.telegram.getMe();
+  const link = `https://t.me/${botInfo.username}?start=invite_${token}`;
+  await ctx.reply(`👑 <b>Collector Invitation Generated</b>\n\nShare this link to authorize a new collector:\n<code>${link}</code>`, { parse_mode: 'HTML' });
+});
 
 bot.command('set_bank', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
@@ -229,7 +247,7 @@ bot.command('broadcast', async (ctx) => {
   await ctx.reply(`✅ Broadcast complete.`);
 });
 
-// --- ADMIN SYSTEM CONFIG ---
+// Admin Connections
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
@@ -252,6 +270,6 @@ bot.command('set_public_channel', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (Zero-Failure Restoration Complete)');
+    console.log('🏛 Yad Al-Awn Portal Active (Executive Menu Registered)');
   } catch (e) { console.error('Launch Failed:', e.message); }
 })();
