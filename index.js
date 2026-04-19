@@ -13,7 +13,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end('<h1>Yad Al-Awn Bot is Operational</h1><p>Full Mission Control Active. 🏮</p>');
+  res.end('<h1>Yad Al-Awn Bot is Active</h1><p>Productivity Engine Running. 🏮</p>');
 }).listen(PORT, () => {
   console.log(`🏥 Heartbeat Server listening on port ${PORT}`);
 });
@@ -52,7 +52,7 @@ async function updateCommands(tg, userId, role) {
 
     if (role === 'superadmin' || role === 'collector') {
       commands.push(
-        { command: 'admin_hub', description: 'Admin Stats / የአስተዳዳሪ ሁኔታ' },
+        { command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' },
         { command: 'my_links', description: 'Referral Link / የእኔ ሊንክ' },
         { command: 'my_stats', description: 'My Impact Stats / የእኔ ስታቲስቲክስ' },
         { command: 'history_all', description: 'Global History / አጠቃላይ ታሪክ' },
@@ -62,6 +62,7 @@ async function updateCommands(tg, userId, role) {
     
     if (role === 'superadmin') {
       commands.push(
+        { command: 'admin_stats', description: 'Team Productivity / የአስተዳዳሪ ስታቲስቲክስ' },
         { command: 'broadcast', description: 'Announcement / መልዕክት ላክ' },
         { command: 'generate_invite', description: 'Invite Collector / ሰብሳቢ ጋብዝ' },
         { command: 'demote', description: 'Demote Collector / ሰብሳቢ ሰርዝ' },
@@ -120,10 +121,10 @@ bot.start(async (ctx) => {
   await ctx.reply(locales[lang].welcome, { parse_mode: 'HTML', ...getMainKeyboard(lang) });
 });
 
-// Standard Features
+// Features
 const donateHandler = (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE');
 bot.command('donate', donateHandler);
-bot.hears([locales.en.btn_donate, locales.am.btn_donate, '💰 Send Donation Receipt'], donateHandler);
+bot.hears([locales.en.btn_donate, locales.am.btn_donate], donateHandler);
 
 const progressHandler = async (ctx) => {
   const lang = await getUserLang(ctx);
@@ -167,7 +168,33 @@ const historyHandler = async (ctx) => {
 bot.command('my_history', historyHandler);
 bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], historyHandler);
 
-// --- 🛡️ ADMIN TOOLS ---
+// --- 💎 ADMIN PRODUCTIVITY ---
+
+bot.command('admin_stats', async (ctx) => {
+  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
+  const stats = await db.all(`
+    SELECT a.name, a.username, 
+           COUNT(d.id) as approvals, 
+           SUM(d.amount) as total_value
+    FROM admins a
+    LEFT JOIN donations d ON a.id = d.approved_by AND d.status = 'approved'
+    GROUP BY a.id, a.name, a.username
+    ORDER BY total_value DESC
+  `);
+
+  let text = `💎 <b>Admin Productivity Report</b>\n\n`;
+  if (stats.length === 0) text += `<i>No administrative activity recorded.</i>`;
+  else {
+    stats.forEach((s, i) => {
+      text += `👤 <b>${s.name || s.username || 'System'}</b>\n` +
+              `↳ Verified: <b>${s.approvals}</b> donations\n` +
+              `↳ Total Value: <b>${parseFloat(s.total_value || 0).toLocaleString()} ETB</b>\n\n`;
+    });
+  }
+  await ctx.reply(text, { parse_mode: 'HTML' });
+});
+
+// --- 🛡️ LOOKUP TOOLS ---
 
 bot.command('view', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
@@ -183,7 +210,7 @@ bot.command('view', async (ctx) => {
 bot.command('history_all', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const history = await db.all(`SELECT d.amount, d.status, u.username FROM donations d JOIN users u ON d.user_id = u.id ORDER BY d.created_at DESC LIMIT 20`);
-  let text = `📋 <b>Global History (Last 20)</b>\n\n`;
+  let text = `📋 <b>Global Log</b>\n\n`;
   history.forEach(d => { text += `${d.status === 'approved' ? '✅' : '⏳'} ${parseFloat(d.amount).toLocaleString()} ETB - ${d.username}\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
@@ -193,44 +220,42 @@ bot.command('demote', async (ctx) => {
   const id = ctx.message.text.split(' ')[1];
   if (!id) return ctx.reply('Usage: /demote <userId>');
   await db.query('DELETE FROM admins WHERE id::text = $1', [id]);
-  await ctx.reply(`✅ Admin/Collector access revoked for ID: ${id}`);
+  await ctx.reply(`✅ Access revoked for ID: ${id}`);
 });
 
 bot.command('my_links', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
-  await ctx.reply(`🔗 <b>Referral Link:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open Link', link)]]) });
+  await ctx.reply(`🔗 <b>My Link:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open', link)]]) });
 });
 
 bot.command('my_stats', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const stats = await db.get(`SELECT COUNT(*) as count, SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total FROM donations WHERE collector_id = $1`, [ctx.from.id]);
-  await ctx.reply(`📊 <b>Collector Stats:</b>\n\nVerified: <b>${parseFloat(stats.total || 0).toLocaleString()} ETB</b>\nEvents: <b>${stats.count}</b>`, { parse_mode: 'HTML' });
+  await ctx.reply(`📊 <b>My Stats:</b>\n\nVerified: <b>${parseFloat(stats.total || 0).toLocaleString()} ETB</b>\nEvents: <b>${stats.count}</b>`, { parse_mode: 'HTML' });
 });
 
-// --- 💣 EMERGENCY SUITE ---
+// --- 💣 EMERGENCY ---
 
 bot.command('hard_reset', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  await ctx.reply('⚠️ <b>CRITICAL ACTION</b>\nThis will wipe ALL donation history. Are you absolutely sure?', {
+  await ctx.reply('⚠️ Wipe ALL data?', {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([[Markup.button.callback('💣 YES, WIPE DATA', 'confirm_hard_reset'), Markup.button.callback('❌ CANCEL', 'cancel_reset')]])
+    ...Markup.inlineKeyboard([[Markup.button.callback('💣 YES', 'confirm_hard_reset'), Markup.button.callback('❌ NO', 'cancel_reset')]])
   });
 });
 
 bot.action('confirm_hard_reset', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.answerCbQuery('Denied.');
   await db.query('DELETE FROM donations');
-  await setSetting('STATUS_MESSAGE_ID_EN', '');
-  await setSetting('STATUS_MESSAGE_ID_AM', '');
-  await ctx.editMessageText('✅ <b>DATABASE WIPED.</b> All donations cleared.', { parse_mode: 'HTML' });
+  await ctx.editMessageText('✅ <b>DATABASE WIPED.</b>');
 });
 
 bot.command('reset_goal', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('GOAL_AMOUNT', '0');
-  await ctx.reply('✅ <b>Goal Reset.</b> Funding target cleared.');
+  await ctx.reply('✅ Goal Reset.');
 });
 
 bot.command('set_goal', async (ctx) => {
@@ -238,11 +263,10 @@ bot.command('set_goal', async (ctx) => {
   const val = ctx.message.text.split(' ')[1];
   if (!val) return ctx.reply('Usage: /set_goal <amount>');
   await setSetting('GOAL_AMOUNT', val);
-  await ctx.reply(`🎯 <b>Goal Set:</b> ${parseFloat(val).toLocaleString()} ETB`);
+  await ctx.reply(`🎯 Goal Set: ${parseFloat(val).toLocaleString()} ETB`);
   await updatePublicStatus(ctx.telegram);
 });
 
-// Admin Logic
 bot.command('admin_hub', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const pending = await db.get("SELECT COUNT(*) as count FROM donations WHERE status = 'pending'");
@@ -265,7 +289,7 @@ bot.action(/approve_(\d+)/, async (ctx) => {
 bot.action(/reject_(\d+)/, async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.answerCbQuery('Unauthorized.');
   const id = ctx.match[1];
-  const d = await db.get('SELECT * FROM donations WHERE id = $1', [id]);
+  const d = await db.get('SELECT * FROM donations WHERE d.id = $1', [id]);
   await db.query("UPDATE donations SET status = 'rejected', approved_by = $1 WHERE id = $2", [ctx.from.id, id]);
   const lang = (await db.get('SELECT language FROM users WHERE id = $1', [d.user_id]))?.language || 'en';
   if (ctx.callbackQuery.message.photo) await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + '\n\n❌ <b>REJECTED</b>', { parse_mode: 'HTML' }).catch(()=>{});
@@ -273,7 +297,7 @@ bot.action(/reject_(\d+)/, async (ctx) => {
   await ctx.telegram.sendMessage(d.user_id, locales[lang].action_rejected, { parse_mode: 'HTML' }).catch(()=>{});
 });
 
-bot.action('cancel_reset', (ctx) => ctx.editMessageText('❌ Reset Cancelled.'));
+bot.action('cancel_reset', (ctx) => ctx.editMessageText('❌ Cancelled.'));
 
 bot.command('cancel', async (ctx) => {
   const lang = await getUserLang(ctx);
@@ -293,14 +317,14 @@ bot.command('broadcast', async (ctx) => {
   await ctx.reply(`✅ Broadcast complete.`);
 });
 
-// Admin Connections
+// Admin System
 bot.command('generate_invite', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const token = Math.random().toString(36).substring(2, 10);
   await db.query('INSERT INTO admin_invites (token, role) VALUES ($1, $2)', [token, 'collector']);
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=invite_${token}`;
-  await ctx.reply(`👑 <b>Collector Invite Generated</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('🔓 Open Authorization Link', link)]]) });
+  await ctx.reply(`👑 <b>Invite Link:</b>`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.url('🔓 Open', link)]]) });
 });
 
 bot.command('set_bank', async (ctx) => {
@@ -334,6 +358,6 @@ bot.command('set_public_channel', async (ctx) => {
     if (sId) await updateCommands(bot.telegram, parseInt(sId), 'superadmin');
     await initScheduler(bot.telegram);
     bot.launch();
-    console.log('🏛 Yad Al-Awn Portal Active (System Completeness Overhaul Complete)');
+    console.log('🏛 Yad Al-Awn Portal Active (Admin Stats Integrated)');
   } catch (e) { console.error('Launch Failed:', e.message); }
 })();
