@@ -16,7 +16,7 @@ const locales = {
     stats_progress: "Current Progress",
     leaderboard_header: "🌟 <b>Yad Al-Awn | Mission Impact Board</b>\n\n<i>Recognizing our top contributors in Khair (Goodness):</i>",
     leaderboard_empty: "No contributions recorded yet. Be the first to initiate a difference!",
-    report_init: "🙏 <b>Mission Support Initiation</b>\n\nPlease specify the total amount of your contribution in **ETB**:",
+    report_init: "🙏 <b>Mission Support Initiation</b>\n\nPlease specify the total amount of your contribution in <b>ETB</b>:",
     report_receipt: "✅ <b>Contribution Registered.</b>\n\nAt Yad Al-Awn, we treat every donation as a specific trust (<i>Amanah</i>). To maintain our strict standards of accountability, please upload your transfer confirmation below.",
     report_success: "✅ <b>Yad Al-Awn | Report Submitted.</b>\n\nYour contribution has been queued for administrative verification. Jazakallah Khair for your generosity. 🙏",
     my_history_header: "📦 <b>My Yad Al-Awn Portfolio</b>",
