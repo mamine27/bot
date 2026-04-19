@@ -7,6 +7,9 @@ async function isAdmin(userId) {
 }
 
 async function isSuperAdmin(userId) {
+  const envSuperId = process.env.SUPER_ADMIN_ID;
+  if (envSuperId && userId.toString() === envSuperId.toString()) return true;
+
   const admin = await db.get("SELECT 1 FROM admins WHERE id = $1 AND role = 'superadmin'", [userId]);
   return !!admin;
 }
