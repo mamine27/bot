@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { db } = require('./database');
+const locales = require('./locales');
 
 async function initScheduler(tg) {
   // Daily Mission Reminder at 10:00 AM
@@ -8,19 +9,17 @@ async function initScheduler(tg) {
     
     try {
       const nonDonors = await db.all(`
-        SELECT users.id FROM users
+        SELECT users.id, users.language FROM users
         LEFT JOIN donations ON users.id = donations.user_id AND donations.status = 'approved'
         WHERE donations.id IS NULL
       `);
       
       for (const donor of nonDonors) {
         try {
-          await tg.sendMessage(donor.id, 
-            `☀️ <b>Yad Al-Awn | Morning Mission Update</b>\n\n` +
-            `We are continuing our collective effort to reach our strategic fundraising objective. Remember the Prophetic wisdom: <i>"Charity does not decrease wealth."</i>\n\n` +
-            `We invite you to be part of this legacy. Use /donate to participate or /stats to view our live progress. 🙏`, 
-            { parse_mode: 'HTML' }
-          );
+          const lang = donor.language || 'en';
+          const l = locales[lang];
+          
+          await tg.sendMessage(donor.id, l.daily_reminder, { parse_mode: 'HTML' });
         } catch (err) {}
       }
     } catch (err) {
