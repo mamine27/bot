@@ -220,7 +220,7 @@ bot.command('my_stats', async (ctx) => {
   await ctx.reply(`📊 <b>My Impact:</b>\nApproved: <b>${parseFloat(stats.total || 0).toLocaleString()} ETB</b>\nEvents: <b>${stats.count}</b>`, { parse_mode: 'HTML' });
 });
 
-ボbot.command('history_all', async (ctx) => {
+bot.command('history_all', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const history = await db.all(`SELECT d.amount, d.status, u.username FROM donations d JOIN users u ON d.user_id = u.id ORDER BY d.created_at DESC LIMIT 20`);
   let text = `📋 <b>Global Log</b>\n\n`;
