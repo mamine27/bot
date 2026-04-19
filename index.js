@@ -202,21 +202,20 @@ bot.command('my_links', async (ctx) => {
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${userId}`;
   
-  let text = `🏮 <b>Yad Al-Awn | Your Invite Link</b>\n\n` +
-             `👤 <b>Collector:</b> ${admin.name || ctx.from.first_name}\n` +
-             `🚀 <b>Status:</b> Active\n\n` +
-             `<b>You can copy and share the message below:</b>\n` +
-             `--------------------------------\n` +
-             `<i>We invite you to support the Yad Al-Awn charity mission. Together we can make a difference! You can donate easily using the link below.</i>\n\n` +
-             `<i>የያድ አል-አውንን በጎ አድራጎት አላማ እንዲደግፉ በአክብሮት እንጠይቃለን። አብረን በመሆን ትልቅ ለውጥ ማምጣት እንችላለን! ከታች ያለውን ሊንክ በመጠቀም በቀላሉ ልገሳ ማድረግ ይችላሉ።</i>\n` +
-             `--------------------------------\n\n` +
-             `👇 <b>Your Unique Link / የእርስዎ ልዩ ሊንክ:</b>\n` +
-             `<code>${link}</code>\n\n` +
-             `<i>Tip: Tap the link above to copy it instantly!</i>`;
+  const forwardableText = `🙏 <b>Support the Yad Al-Awn Charity Mission</b>\n\n` +
+                          `We invite you to support our cause. Together we can make a difference! You can donate easily and securely using the official link below.\n\n` +
+                          `የያድ አል-አውንን በጎ አድራጎት አላማ እንዲደግፉ በአክብሮት እንጠይቃለን። አብረን በመሆን ትልቅ ለውጥ ማምጣት እንችላለን! ከታች ያለውን ሊንክ በመጠቀም በቀላሉ ልገሳ ማድረግ ይችላሉ።\n\n` +
+                          `👇 <b>Please tap here to start / ለመጀመር እዚህ ይጫኑ:</b>\n` +
+                          `${link}`;
 
-  await ctx.reply(text, {
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("🙏 Support the Yad Al-Awn Charity Mission / የያድ አል-አውንን በጎ አድራጎት አላማ ይደግፉ: ")}`;
+
+  await ctx.reply('<i>Here is your shareable invite. Simply forward the message below to your contacts, or use the exact share button!</i> 👇', { parse_mode: 'HTML' });
+  await ctx.reply(forwardableText, {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([[Markup.button.url('🚀 Open Link', link)]])
+    ...Markup.inlineKeyboard([
+      [Markup.button.url('📲 Forward to Friends / ለጓደኞችዎ ያጋሩ', shareUrl)]
+    ])
   });
 });
 
