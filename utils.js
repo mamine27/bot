@@ -49,7 +49,8 @@ async function updatePublicStatus(tg) {
                `${l.stats_target}: <b>${goal.toLocaleString()} ETB</b>\n\n`;
 
     if (topDonations.length > 0) {
-      text += `<b>${l.leaderboard_header.split('\n')[0]}</b>\n`;
+      const headerTitle = l.leaderboard_header.split('\n')[0];
+      text += `<b>${headerTitle}</b>\n`;
       topDonations.forEach((d, i) => {
         const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '🔹'));
         text += `${medal} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`;
@@ -62,33 +63,27 @@ async function updatePublicStatus(tg) {
     return text;
   };
 
-  // 1. Update English Post
-  const msgEnId = await getSettings('STATUS_MESSAGE_ID_EN');
-  const textEn = generatePost('en');
-  if (msgEnId) {
-    try { await tg.editMessageText(channelId, parseInt(msgEnId), null, textEn, { parse_mode: 'HTML' }); }
-    catch (e) {
-      const sent = await tg.sendMessage(channelId, textEn, { parse_mode: 'HTML' });
-      await setSetting('STATUS_MESSAGE_ID_EN', sent.message_id);
+  const syncPost = async (lang, key) => {
+    const msgId = await getSettings(key);
+    const text = generatePost(lang);
+    if (msgId) {
+      try {
+        await tg.editMessageText(channelId, parseInt(msgId), null, text, { parse_mode: 'HTML' });
+      } catch (e) {
+        const sent = await tg.sendMessage(channelId, text, { parse_mode: 'HTML' });
+        await setSetting(key, sent.message_id);
+        await tg.pinChatMessage(channelId, sent.message_id).catch(() => {});
+      }
+    } else {
+      const sent = await tg.sendMessage(channelId, text, { parse_mode: 'HTML' });
+      await setSetting(key, sent.message_id);
+      await tg.pinChatMessage(channelId, sent.message_id).catch(() => {});
     }
-  } else {
-    const sent = await tg.sendMessage(channelId, textEn, { parse_mode: 'HTML' });
-    await setSetting('STATUS_MESSAGE_ID_EN', sent.message_id);
-  }
+  };
 
-  // 2. Update Amharic Post
-  const msgAmId = await getSettings('STATUS_MESSAGE_ID_AM');
-  const textAm = generatePost('am');
-  if (msgAmId) {
-    try { await tg.editMessageText(channelId, parseInt(msgAmId), null, textAm, { parse_mode: 'HTML' }); }
-    catch (e) {
-      const sent = await tg.sendMessage(channelId, textAm, { parse_mode: 'HTML' });
-      await setSetting('STATUS_MESSAGE_ID_AM', sent.message_id);
-    }
-  } else {
-    const sent = await tg.sendMessage(channelId, textAm, { parse_mode: 'HTML' });
-    await setSetting('STATUS_MESSAGE_ID_AM', sent.message_id);
-  }
+  // Synchronize both English and Amharic posts
+  await syncPost('en', 'STATUS_MESSAGE_ID_EN');
+  await syncPost('am', 'STATUS_MESSAGE_ID_AM');
 }
 
 module.exports = {
