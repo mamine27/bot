@@ -21,7 +21,6 @@ async function getUserLang(ctx) {
 
 async function updateCommands(tg, userId, role) {
   try {
-    const lang = 'en'; // Default for command menu descriptions (Telegram limits)
     let commands = [
       { command: 'start', description: 'Re-initialize / ጀምር' },
       { command: 'donate', description: 'Send Receipt / ደረሰኝ ላክ' },
@@ -55,13 +54,12 @@ bot.action(/lang_(en|am)/, async (ctx) => {
   const lang = ctx.match[1];
   const userId = ctx.from.id;
   
-  // Ensure user exists before updating lang
-  const user = await db.get('SELECT * FROM users WHERE id = $1', [userId]);
-  if (!user) {
-    await db.query('INSERT INTO users (id, username, language) VALUES ($1, $2, $3)', [userId, ctx.from.username || ctx.from.first_name, lang]);
-  } else {
-    await db.query('UPDATE users SET language = $1 WHERE id = $2', [lang, userId]);
-  }
+  // Update or insert with language
+  await db.query(`
+    INSERT INTO users (id, username, language) 
+    VALUES ($1, $2, $3) 
+    ON CONFLICT (id) DO UPDATE SET language = $3
+  `, [userId, ctx.from.username || ctx.from.first_name, lang]);
   
   await ctx.answerCbQuery(lang === 'en' ? 'Language optimized to English.' : 'ቋንቋ ወደ አማርኛ ተቀይሯል።');
   
@@ -74,7 +72,6 @@ bot.action(/lang_(en|am)/, async (ctx) => {
 
   await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
   
-  // Update command menu descriptions (Optional bilingual)
   const admin = await db.get('SELECT role FROM admins WHERE id = $1', [userId]);
   await updateCommands(ctx.telegram, userId, admin?.role || 'user');
 });
@@ -86,9 +83,8 @@ bot.start(async (ctx) => {
 
   // Check if they need language selection
   const user = await db.get('SELECT language FROM users WHERE id = $1', [userId]);
-  if (!user) {
-    // New User - Store payload temporarily in session
-    ctx.session.startPayload = payload;
+  if (!user || !user.language) {
+    if (payload) ctx.session.startPayload = payload;
     return ctx.reply(locales.en.select_language + "\n" + locales.am.select_language, Markup.inlineKeyboard([
       [Markup.button.callback('🇺🇸 English', 'lang_en'), Markup.button.callback('🇪🇹 አማርኛ', 'lang_am')]
     ]));
@@ -97,26 +93,21 @@ bot.start(async (ctx) => {
   const lang = user.language || 'en';
   const l = locales[lang];
 
-  // 1. Handle Admin Invites
-  if (payload && payload.startsWith('invite_')) {
-    const token = payload.replace('invite_', '');
+  // Post-Migration: Handle Referrals/Invites
+  const activePayload = payload || ctx.session.startPayload;
+  if (activePayload && activePayload.startsWith('invite_')) {
+    const token = activePayload.replace('invite_', '');
     const invite = await db.get('SELECT * FROM admin_invites WHERE token = $1', [token]);
-    
     if (invite) {
-      try {
-        await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4)', 
+      await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET role = $4', 
           [userId, ctx.from.username, username, invite.role]);
-        await updateCommands(ctx.telegram, userId, invite.role);
-        await ctx.reply(lang === 'en' ? `👑 <b>Authorized as ${invite.role}.</b>` : `👑 <b>እንደ ${invite.role} ተፈቅዶልዎታል።</b>`, { parse_mode: 'HTML' });
-      } catch (e) {}
+      await updateCommands(ctx.telegram, userId, invite.role);
     }
-  }
-
-  // 2. Handle Referrals (if not already handled)
-  if (payload && !payload.startsWith('invite_')) {
-    const admin = await db.get('SELECT id FROM admins WHERE id::text = $1 OR username = $1', [payload]);
+  } else if (activePayload) {
+    const admin = await db.get('SELECT id FROM admins WHERE id::text = $1 OR username = $1', [activePayload]);
     if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
   }
+  ctx.session.startPayload = null;
 
   const keyboard = Markup.keyboard([
     [l.btn_donate],
@@ -127,10 +118,12 @@ bot.start(async (ctx) => {
   await ctx.reply(l.welcome, { parse_mode: 'HTML', ...keyboard });
 });
 
-// Dynamic Button Handlers
-bot.hears([locales.en.btn_donate, locales.am.btn_donate], (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE'));
+// Dynamic Button Handlers + 🛡️ LEGACY SUPPORT
+const donateButtons = [locales.en.btn_donate, locales.am.btn_donate, '💰 Report Contribution', '💰 Send Donation Receipt'];
+bot.hears(donateButtons, (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE'));
 
-bot.hears([locales.en.btn_progress, locales.am.btn_progress], async (ctx) => {
+const progressButtons = [locales.en.btn_progress, locales.am.btn_progress, '📊 Mission Progress', '📊 Check Progress'];
+bot.hears(progressButtons, async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
   const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
@@ -150,7 +143,8 @@ bot.hears([locales.en.btn_progress, locales.am.btn_progress], async (ctx) => {
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], async (ctx) => {
+const leaderboardButtons = [locales.en.btn_top_donors, locales.am.btn_top_donors, '🌟 Impact Board', '🌟 Top Donors'];
+bot.hears(leaderboardButtons, async (ctx) => {
   const lang = await getUserLang(ctx);
   const l = locales[lang];
   const donors = await db.all(`
@@ -171,9 +165,9 @@ bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], async (ctx) =>
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], async (ctx) => {
+bot.hears([locales.en.btn_my_history, locales.am.btn_my_history, '📦 My Donation Portfolio', '📦 My Contribution History'], async (ctx) => {
   const lang = await getUserLang(ctx);
-  const l = locales[locales[lang] ? lang : 'en'];
+  const l = locales[lang];
   const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [ctx.from.id]);
   
   if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty);
@@ -188,7 +182,7 @@ bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], async (ctx) =>
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
-// Admin Commands (Simplified)
+// Admin Commands
 bot.command('set_group', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   await setSetting('REPORT_GROUP_ID', ctx.chat.id.toString());
@@ -243,7 +237,7 @@ bot.command('cancel', async (ctx) => {
   return ctx.scene.leave();
 });
 
-// Broadcast (Respects Language)
+// Broadcast
 bot.command('broadcast', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const msg = ctx.message.text.split(' ').slice(1).join(' ');

@@ -11,7 +11,7 @@ const pool = new Pool({
 async function initDB() {
   const client = await pool.connect();
   try {
-    // Initialize Schema with Language support
+    // 1. Initialize Schema (Standard Tables)
     await client.query(`
       CREATE TABLE IF NOT EXISTS admins (
         id BIGINT PRIMARY KEY,
@@ -24,7 +24,6 @@ async function initDB() {
         id BIGINT PRIMARY KEY,
         username TEXT,
         collector_id BIGINT,
-        language TEXT DEFAULT 'en',
         joined_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -51,14 +50,24 @@ async function initDB() {
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // 2. 🛡️ SAFE MIGRATION: Add 'language' column to existing 'users' table
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='language') THEN 
+          ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'; 
+        END IF; 
+      END $$;
+    `);
     
-    // Auto-onboard SuperAdmin
+    // 3. Auto-onboard SuperAdmin
     const superAdminId = process.env.SUPER_ADMIN_ID;
     if (superAdminId) {
       await client.query('INSERT INTO admins (id, role, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING', [superAdminId, 'superadmin', 'Primary Admin']);
     }
 
-    console.log('🏛 Postgres Mission Database Initialized (Bilingual Support).');
+    console.log('🏛 Postgres Mission Database Initialized (Migration Complete).');
   } finally {
     client.release();
   }
