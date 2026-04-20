@@ -54,7 +54,7 @@ async function updateCommands(tg, userId, role) {
       commands.push(
         { command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' },
         { command: 'my_links', description: 'My Invite Link / የኔ ሊንክ' },
-        { command: 'my_stats', description: 'My Impact Stats / የኔ ስታቲስቲክስ' },
+        { command: 'my_stats', description: 'My Impact Stats / የእኔ ስታቲስቲክስ' },
         { command: 'history_all', description: 'Global History / አጠቃላይ ታሪክ' },
         { command: 'view', description: 'View Donation / ልገሳ ተመልከት' }
       );
@@ -67,8 +67,7 @@ async function updateCommands(tg, userId, role) {
         { command: 'generate_invite', description: 'Invite Admin / አድሚን ጋብዝ' },
         { command: 'demote', description: 'Demote Admin / አድሚን ሰርዝ' },
         { command: 'set_bank', description: 'Update Banks / ባንክ ቀይር' },
-        { command: 'set_goal', description: 'Set Goal / ግብ አስቀምጥ' },
-        { command: 'reset_goal', description: 'Reset Goal / ግብ ሰርዝ' },
+        { command: 'set_user_target', description: 'Set Amount per User / የነፍስ ወከፍ መጠን' },
         { command: 'set_group', description: 'Connect Group / ግሩፕ አገናኝ' },
         { command: 'set_public_channel', description: 'Connect Channel / ቻናል አገናኝ' },
         { command: 'hard_reset', description: 'WIPE ALL DATA / ሁሉንም ሰርዝ' }
@@ -110,8 +109,11 @@ bot.start(async (ctx) => {
     const invite = await db.get('SELECT * FROM admin_invites WHERE token = $1', [token]);
     if (invite) await db.query('INSERT INTO admins (id, username, name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET role = $4', [userId, ctx.from.username, username, invite.role]);
   } else if (activePayload) {
-    const admin = await db.get('SELECT id FROM admins WHERE id::text = $1 OR username = $1', [activePayload]);
-    if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
+    const adminNum = parseInt(activePayload);
+    if (!isNaN(adminNum)) {
+       const admin = await db.get('SELECT id FROM admins WHERE id = $1', [adminNum]);
+       if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
+    }
   }
   ctx.session.startPayload = null;
   
@@ -131,35 +133,43 @@ const donateHandler = (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE');
 bot.command('donate', donateHandler);
 bot.hears([locales.en.btn_donate, locales.am.btn_donate], donateHandler);
 
-const progressHandler = async (ctx) => {
+bot.command('progress', async (ctx) => {
   const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
   const l = locales[await getUserLang(ctx)];
-  const goalVal = await getSettings('GOAL_AMOUNT', 0);
-  const goal = parseFloat(goalVal);
+  
+  const userTargetRaw = await getSettings('USER_TARGET_AMOUNT', 0);
+  const userTarget = parseFloat(userTargetRaw);
+  const userCountStats = await db.get("SELECT COUNT(*) as count FROM users");
+  const totalUsers = parseInt(userCountStats.count || 0);
+  
+  const goal = totalUsers * userTarget;
   const total = parseFloat(stats.total || 0);
   
-  let text = `${l.stats_header}\n\n${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n${l.stats_events}: <b>${stats.count}</b>\n`;
+  let text = `${l.stats_header}\n\n` +
+             `💰 ${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n` +
+             `🤝 ${l.stats_events}: <b>${stats.count}</b>\n` +
+             `👥 Community: <b>${totalUsers} users</b>\n`;
+             
   if (goal > 0) {
     const percent = Math.min(100, (total / goal) * 100);
-    text += `${l.stats_target}: <b>${goal.toLocaleString()} ETB</b>\n${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
+    text += `🎯 Dynamic Goal: <b>${goal.toLocaleString()} ETB</b>\n` +
+            `📈 ${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
   }
   await ctx.reply(text, { parse_mode: 'HTML' });
-};
-bot.command('progress', progressHandler);
-bot.hears([locales.en.btn_progress, locales.am.btn_progress], progressHandler);
+});
+bot.hears([locales.en.btn_progress, locales.am.btn_progress], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/progress' } }));
 
-const topDonorsHandler = async (ctx) => {
+bot.command('top_donors', async (ctx) => {
   const l = locales[await getUserLang(ctx)];
   const donors = await db.all(`SELECT SUM(amount) as total FROM donations WHERE status = 'approved' GROUP BY user_id ORDER BY total DESC LIMIT 10`);
   let text = l.leaderboard_header + '\n\n';
   if (donors.length === 0) text += l.leaderboard_empty;
   else donors.forEach((d, i) => { text += `${i < 3 ? ['🥇','🥈','🥉'][i] : '🔹'} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
-};
-bot.command('top_donors', topDonorsHandler);
-bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], topDonorsHandler);
+});
+bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/top_donors' } }));
 
-const historyHandler = async (ctx) => {
+bot.command('my_history', async (ctx) => {
   const l = locales[await getUserLang(ctx)];
   const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [ctx.from.id]);
   if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty, { parse_mode: 'HTML' });
@@ -167,9 +177,8 @@ const historyHandler = async (ctx) => {
   let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
   history.forEach(d => { text += `${d.status === 'approved' ? '✅' : '⏳'} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
-};
-bot.command('my_history', historyHandler);
-bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], historyHandler);
+});
+bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/my_history' } }));
 
 // --- 💎 ADMIN PRODUCTIVITY ---
 bot.command('admin_stats', async (ctx) => {
@@ -213,16 +222,34 @@ bot.command('my_links', async (ctx) => {
   await ctx.reply('<i>Here is your shareable invite. Simply forward the message below to your contacts, or use the exact share button!</i> 👇', { parse_mode: 'HTML' });
   await ctx.reply(forwardableText, {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([
-      [Markup.button.url('📲 Forward to Friends / ለጓደኞችዎ ያጋሩ', shareUrl)]
-    ])
+    ...Markup.inlineKeyboard([[Markup.button.url('📲 Forward to Friends / ለጓደኞችዎ ያጋሩ', shareUrl)]])
   });
 });
 
 bot.command('my_stats', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  const stats = await db.get(`SELECT COUNT(*) as count, SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total FROM donations WHERE collector_id = $1`, [ctx.from.id]);
-  await ctx.reply(`📊 <b>My Impact:</b>\nApproved: <b>${parseFloat(stats.total || 0).toLocaleString()} ETB</b>\nEvents: <b>${stats.count}</b>`, { parse_mode: 'HTML' });
+  
+  const recruits = await db.all(`
+    SELECT u.username, u.first_name,
+    (SELECT COUNT(*) FROM donations d WHERE d.user_id = u.id AND d.status = 'approved') as donated
+    FROM users u WHERE u.collector_id = $1
+  `, [ctx.from.id]);
+
+  let text = `📊 <b>My Impact Details</b>\n\n`;
+  if (recruits.length === 0) {
+    text += `<i>You haven't recruited any donors yet. Use /my_links to start!</i>`;
+  } else {
+    text += `👤 <b>Recruited Members (${recruits.length}):</b>\n`;
+    recruits.forEach(r => {
+      const statusIcon = r.donated > 0 ? '✅ Donated' : '⏳ Waiting';
+      text += `• ${r.username || r.first_name || 'User'}: ${statusIcon}\n`;
+    });
+  }
+  
+  const stats = await db.get(`SELECT SUM(amount) as total FROM donations WHERE collector_id = $1 AND status = 'approved'`, [ctx.from.id]);
+  text += `\n💰 <b>Total Verified Capital:</b> ${parseFloat(stats.total || 0).toLocaleString()} ETB`;
+  
+  await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
 bot.command('history_all', async (ctx) => {
@@ -299,19 +326,12 @@ bot.command('set_bank', async (ctx) => {
   await ctx.reply('✅ <b>Bank Details Updated.</b>', { parse_mode: 'HTML' });
 });
 
-bot.command('set_goal', async (ctx) => {
+bot.command('set_user_target', async (ctx) => {
   if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   const val = ctx.message.text.split(' ')[1];
-  if (!val) return ctx.reply('Usage: /set_goal <amount>');
-  await setSetting('GOAL_AMOUNT', val);
-  await ctx.reply(`🎯 <b>Goal Set:</b> ${parseFloat(val).toLocaleString()} ETB`, { parse_mode: 'HTML' });
-  await updatePublicStatus(ctx.telegram);
-});
-
-bot.command('reset_goal', async (ctx) => {
-  if (!await isSuperAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  await setSetting('GOAL_AMOUNT', '0');
-  await ctx.reply('✅ <b>Goal Reset.</b>', { parse_mode: 'HTML' });
+  if (!val) return ctx.reply('Usage: /set_user_target <amount>');
+  await setSetting('USER_TARGET_AMOUNT', val);
+  await ctx.reply(`🎯 <b>Target per User Set:</b> ${parseFloat(val).toLocaleString()} ETB`, { parse_mode: 'HTML' });
   await updatePublicStatus(ctx.telegram);
 });
 

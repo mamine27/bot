@@ -31,16 +31,23 @@ function getProgressBar(percent) {
 }
 
 async function updatePublicStatus(tg) {
-  const goalVal = await getSettings('GOAL_AMOUNT', 0);
-  const goal = parseFloat(goalVal);
   const channelId = await getSettings('PUBLIC_CHANNEL_ID');
+  if (!channelId) return;
+
+  const userTargetRaw = await getSettings('USER_TARGET_AMOUNT', 0);
+  const userTarget = parseFloat(userTargetRaw);
   
-  if (!goal || !channelId) return;
+  const userCountStats = await db.get("SELECT COUNT(*) as count FROM users");
+  const totalUsers = parseInt(userCountStats.count || 0);
+  
+  // Dynamic Goal Calculation
+  const goal = totalUsers * userTarget;
 
   const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
   const total = parseFloat(stats.total || 0);
   const numEvents = stats.count || 0;
-  const percent = Math.min(100, (total / goal) * 100);
+  
+  const percent = goal > 0 ? Math.min(100, (total / goal) * 100) : 0;
   const remaining = Math.max(0, goal - total);
   
   const topDonations = await db.all(`SELECT SUM(amount) as total FROM donations WHERE status = 'approved' GROUP BY user_id ORDER BY total DESC LIMIT 5`);
@@ -56,7 +63,8 @@ async function updatePublicStatus(tg) {
   let text = `📊 <b>Yad Al-Awn | Live Progress / አጠቃላይ ሂደት</b>\n\n` +
              `<code>${getProgressBar(percent)}</code>\n\n` +
              `💰 <b>Total / የተሰበሰበ:</b> ${total.toLocaleString()} ETB\n` +
-             `🎯 <b>Goal / የልገሳ ግብ:</b> ${goal.toLocaleString()} ETB\n` +
+             `👥 <b>Community / ማህበረሰብ:</b> ${totalUsers} users\n` +
+             `🎯 <b>Dynamic Goal / ተለዋዋጭ ግብ:</b> ${goal.toLocaleString()} ETB\n` +
              `⏳ <b>Remaining / የቀረው:</b> ${remaining.toLocaleString()} ETB\n` +
              `🤝 <b>Events / የተረጋገጡ ልገሳዎች:</b> ${numEvents}\n\n`;
 
