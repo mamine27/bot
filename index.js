@@ -54,7 +54,7 @@ async function updateCommands(tg, userId, role) {
       commands.push(
         { command: 'admin_hub', description: 'Admin Hub / የአስተዳዳሪ ማዕከል' },
         { command: 'my_links', description: 'My Invite Link / የኔ ሊንክ' },
-        { command: 'my_stats', description: 'My Impact Stats / የእኔ ስታቲስቲክስ' },
+        { command: 'my_stats', description: 'My Impact Stats / የኔ ስታቲስቲክስ' },
         { command: 'history_all', description: 'Global History / አጠቃላይ ታሪክ' },
         { command: 'view', description: 'View Donation / ልገሳ ተመልከት' }
       );
@@ -147,12 +147,12 @@ bot.command('progress', async (ctx) => {
   
   let text = `${l.stats_header}\n\n` +
              `💰 ${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n` +
-             `🤝 ${l.stats_events}: <b>${stats.count}</b>\n` +
-             `👥 Community: <b>${totalUsers} users</b>\n`;
+             `🤝 Verified Donations: <b>${stats.count}</b>\n` +
+             `👥 Our Supporters: <b>${totalUsers} people</b>\n`;
              
   if (goal > 0) {
     const percent = Math.min(100, (total / goal) * 100);
-    text += `🎯 Dynamic Goal: <b>${goal.toLocaleString()} ETB</b>\n` +
+    text += `🎯 Our Mission Target: <b>${goal.toLocaleString()} ETB</b>\n` +
             `📈 ${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
   }
   await ctx.reply(text, { parse_mode: 'HTML' });
@@ -191,7 +191,7 @@ bot.command('admin_stats', async (ctx) => {
            (SELECT COUNT(DISTINCT u.id) FROM users u JOIN donations ud ON u.id = ud.user_id WHERE u.collector_id = a.id AND ud.status = 'approved') as donors_converted
     FROM admins a ORDER BY verified_value DESC
   `);
-  let text = `📈 <b>Team Analysis</b>\n\n`;
+  let text = `📈 <b>Internal Team Analysis</b>\n\n`;
   stats.forEach(s => {
     const added = parseInt(s.people_added || 0); const converted = parseInt(s.donors_converted || 0);
     const percent = added > 0 ? ((converted / added) * 100).toFixed(1) : '0';
@@ -237,17 +237,17 @@ bot.command('my_stats', async (ctx) => {
 
   let text = `📊 <b>My Impact Details</b>\n\n`;
   if (recruits.length === 0) {
-    text += `<i>You haven't recruited any donors yet. Use /my_links to start!</i>`;
+    text += `<i>You haven't invited anyone to support the mission yet. Use /my_links to start!</i>`;
   } else {
-    text += `👤 <b>Recruited Members (${recruits.length}):</b>\n`;
+    text += `👤 <b>Friends who've joined through you (${recruits.length}):</b>\n`;
     recruits.forEach(r => {
       const statusIcon = r.donated > 0 ? '✅ Donated' : '⏳ Waiting';
-      text += `• ${r.username || r.first_name || 'User'}: ${statusIcon}\n`;
+      text += `• ${r.username || r.first_name || 'Supporter'}: ${statusIcon}\n`;
     });
   }
   
   const stats = await db.get(`SELECT SUM(amount) as total FROM donations WHERE collector_id = $1 AND status = 'approved'`, [ctx.from.id]);
-  text += `\n💰 <b>Total Verified Capital:</b> ${parseFloat(stats.total || 0).toLocaleString()} ETB`;
+  text += `\n💰 <b>Total Verified Donations:</b> ${parseFloat(stats.total || 0).toLocaleString()} ETB`;
   
   await ctx.reply(text, { parse_mode: 'HTML' });
 });

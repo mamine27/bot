@@ -62,11 +62,11 @@ async function updatePublicStatus(tg) {
 
   let text = `📊 <b>Yad Al-Awn | Live Progress / አጠቃላይ ሂደት</b>\n\n` +
              `<code>${getProgressBar(percent)}</code>\n\n` +
-             `💰 <b>Total / የተሰበሰበ:</b> ${total.toLocaleString()} ETB\n` +
-             `👥 <b>Community / ማህበረሰብ:</b> ${totalUsers} users\n` +
-             `🎯 <b>Dynamic Goal / ተለዋዋጭ ግብ:</b> ${goal.toLocaleString()} ETB\n` +
+             `💰 <b>Total Donated / የተሰበሰበ:</b> ${total.toLocaleString()} ETB\n` +
+             `👥 <b>Our Supporters / ደጋፊዎቻችን:</b> ${totalUsers} people\n` +
+             `🎯 <b>Mission Target / የልገሳ ግባችን:</b> ${goal.toLocaleString()} ETB\n` +
              `⏳ <b>Remaining / የቀረው:</b> ${remaining.toLocaleString()} ETB\n` +
-             `🤝 <b>Events / የተረጋገጡ ልገሳዎች:</b> ${numEvents}\n\n`;
+             `🤝 <b>Verified Donations / የተረጋገጡ ልገሳዎች:</b> ${numEvents}\n\n`;
 
   if (topDonations.length > 0) {
     text += `🌟 <b>Top Donors / ቀዳሚ ለጋሾች</b>\n`;
