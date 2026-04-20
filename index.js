@@ -133,7 +133,7 @@ const donateHandler = (ctx) => ctx.scene.enter('REPORT_DONATION_SCENE');
 bot.command('donate', donateHandler);
 bot.hears([locales.en.btn_donate, locales.am.btn_donate], donateHandler);
 
-bot.command('progress', async (ctx) => {
+const progressHandler = async (ctx) => {
   const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
   const l = locales[await getUserLang(ctx)];
   
@@ -156,20 +156,22 @@ bot.command('progress', async (ctx) => {
             `📈 ${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
   }
   await ctx.reply(text, { parse_mode: 'HTML' });
-});
-bot.hears([locales.en.btn_progress, locales.am.btn_progress], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/progress' } }));
+};
+bot.command('progress', progressHandler);
+bot.hears([locales.en.btn_progress, locales.am.btn_progress], progressHandler);
 
-bot.command('top_donors', async (ctx) => {
+const topDonorsHandler = async (ctx) => {
   const l = locales[await getUserLang(ctx)];
   const donors = await db.all(`SELECT SUM(amount) as total FROM donations WHERE status = 'approved' GROUP BY user_id ORDER BY total DESC LIMIT 10`);
   let text = l.leaderboard_header + '\n\n';
   if (donors.length === 0) text += l.leaderboard_empty;
   else donors.forEach((d, i) => { text += `${i < 3 ? ['🥇','🥈','🥉'][i] : '🔹'} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
-});
-bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/top_donors' } }));
+};
+bot.command('top_donors', topDonorsHandler);
+bot.hears([locales.en.btn_top_donors, locales.am.btn_top_donors], topDonorsHandler);
 
-bot.command('my_history', async (ctx) => {
+const historyHandler = async (ctx) => {
   const l = locales[await getUserLang(ctx)];
   const stats = await db.get(`SELECT SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as approved, COUNT(*) as count FROM donations WHERE user_id = $1`, [ctx.from.id]);
   if (!stats || stats.count === '0') return ctx.reply(l.my_history_empty, { parse_mode: 'HTML' });
@@ -177,8 +179,9 @@ bot.command('my_history', async (ctx) => {
   let text = `${l.my_history_header}\n\n${l.my_history_verified}: <b>${parseFloat(stats.approved || 0).toLocaleString()} ETB</b>\n\n`;
   history.forEach(d => { text += `${d.status === 'approved' ? '✅' : '⏳'} ${parseFloat(d.amount).toLocaleString()} ETB - <i>${new Date(d.created_at).toLocaleDateString()}</i>\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
-});
-bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], (ctx) => bot.handleUpdate({ ...ctx.update, message: { ...ctx.message, text: '/my_history' } }));
+};
+bot.command('my_history', historyHandler);
+bot.hears([locales.en.btn_my_history, locales.am.btn_my_history], historyHandler);
 
 // --- 💎 ADMIN PRODUCTIVITY ---
 bot.command('admin_stats', async (ctx) => {
@@ -230,7 +233,7 @@ bot.command('my_stats', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
   
   const recruits = await db.all(`
-    SELECT u.username, u.first_name,
+    SELECT u.username,
     (SELECT COUNT(*) FROM donations d WHERE d.user_id = u.id AND d.status = 'approved') as donated
     FROM users u WHERE u.collector_id = $1
   `, [ctx.from.id]);
@@ -242,12 +245,14 @@ bot.command('my_stats', async (ctx) => {
     text += `👤 <b>Friends who've joined through you (${recruits.length}):</b>\n`;
     recruits.forEach(r => {
       const statusIcon = r.donated > 0 ? '✅ Donated' : '⏳ Waiting';
-      text += `• ${r.username || r.first_name || 'Supporter'}: ${statusIcon}\n`;
+      const displayName = r.username || 'Supporter';
+      text += `• ${displayName}: ${statusIcon}\n`;
     });
   }
   
-  const stats = await db.get(`SELECT SUM(amount) as total FROM donations WHERE collector_id = $1 AND status = 'approved'`, [ctx.from.id]);
-  text += `\n💰 <b>Total Verified Donations:</b> ${parseFloat(stats.total || 0).toLocaleString()} ETB`;
+  const statsRow = await db.get(`SELECT SUM(amount) as total FROM donations WHERE collector_id = $1 AND status = 'approved'`, [ctx.from.id]);
+  const totalVal = statsRow?.total || 0;
+  text += `\n💰 <b>Total Verified Donations:</b> ${parseFloat(totalVal).toLocaleString()} ETB`;
   
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
