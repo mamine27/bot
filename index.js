@@ -59,7 +59,7 @@ async function updateCommands(tg, userId, role) {
         { command: 'view', description: 'View Donation / ልገሳ ተመልከት' }
       );
     }
-    
+
     if (role === 'superadmin') {
       commands.push(
         { command: 'admin_stats', description: 'Team Growth / የአስተዳዳሪ ስታቲስቲክስ' },
@@ -73,7 +73,7 @@ async function updateCommands(tg, userId, role) {
         { command: 'hard_reset', description: 'WIPE ALL DATA / ሁሉንም ሰርዝ' }
       );
     }
-    
+
     await tg.setMyCommands(commands, { scope: { type: 'chat', chat_id: userId } });
   } catch (e) { console.error('Menu Error:', e.message); }
 }
@@ -103,7 +103,7 @@ bot.start(async (ctx) => {
   const user = await db.get('SELECT language FROM users WHERE id = $1', [userId]);
   if (!user || !user.language) { if (payload) ctx.session.startPayload = payload; return langHandler(ctx); }
   const lang = user.language || 'en'; const activePayload = payload || ctx.session.startPayload;
-  
+
   if (activePayload?.startsWith('invite_')) {
     const token = activePayload.replace('invite_', '');
     const invite = await db.get('SELECT * FROM admin_invites WHERE token = $1', [token]);
@@ -111,12 +111,12 @@ bot.start(async (ctx) => {
   } else if (activePayload) {
     const adminNum = parseInt(activePayload);
     if (!isNaN(adminNum)) {
-       const admin = await db.get('SELECT id FROM admins WHERE id = $1', [adminNum]);
-       if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
+      const admin = await db.get('SELECT id FROM admins WHERE id = $1', [adminNum]);
+      if (admin) await db.query('UPDATE users SET collector_id = $1 WHERE id = $2', [admin.id, userId]);
     }
   }
   ctx.session.startPayload = null;
-  
+
   const adminEntry = await db.get('SELECT role FROM admins WHERE id = $1', [userId]);
   await updateCommands(ctx.telegram, userId, adminEntry?.role || 'user');
   await ctx.reply(locales[lang].welcome, { parse_mode: 'HTML', ...getMainKeyboard(lang) });
@@ -136,24 +136,24 @@ bot.hears([locales.en.btn_donate, locales.am.btn_donate], donateHandler);
 const progressHandler = async (ctx) => {
   const stats = await db.get("SELECT SUM(amount) as total, COUNT(*) as count FROM donations WHERE status = 'approved'");
   const l = locales[await getUserLang(ctx)];
-  
+
   const userTargetRaw = await getSettings('USER_TARGET_AMOUNT', 0);
   const userTarget = parseFloat(userTargetRaw);
   const userCountStats = await db.get("SELECT COUNT(*) as count FROM users");
   const totalUsers = parseInt(userCountStats.count || 0);
-  
+
   const goal = totalUsers * userTarget;
   const total = parseFloat(stats.total || 0);
-  
+
   let text = `${l.stats_header}\n\n` +
-             `💰 ${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n` +
-             `🤝 Verified Donations: <b>${stats.count}</b>\n` +
-             `👥 Our Supporters: <b>${totalUsers} people</b>\n`;
-             
+    `💰 ${l.stats_total}: <b>${total.toLocaleString()} ETB</b>\n` +
+    `🤝 Verified Donations: <b>${stats.count}</b>\n` +
+    `👥 Our Supporters: <b>${totalUsers} people</b>\n`;
+
   if (goal > 0) {
     const percent = Math.min(100, (total / goal) * 100);
     text += `🎯 Our Mission Target: <b>${goal.toLocaleString()} ETB</b>\n` +
-            `📈 ${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
+      `📈 ${l.stats_progress}: <b>${percent.toFixed(1)}%</b>`;
   }
   await ctx.reply(text, { parse_mode: 'HTML' });
 };
@@ -165,7 +165,7 @@ const topDonorsHandler = async (ctx) => {
   const donors = await db.all(`SELECT SUM(amount) as total FROM donations WHERE status = 'approved' GROUP BY user_id ORDER BY total DESC LIMIT 10`);
   let text = l.leaderboard_header + '\n\n';
   if (donors.length === 0) text += l.leaderboard_empty;
-  else donors.forEach((d, i) => { text += `${i < 3 ? ['🥇','🥈','🥉'][i] : '🔹'} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`; });
+  else donors.forEach((d, i) => { text += `${i < 3 ? ['🥇', '🥈', '🥉'][i] : '🔹'} <b>${parseFloat(d.total).toLocaleString()} ETB</b>\n`; });
   await ctx.reply(text, { parse_mode: 'HTML' });
 };
 bot.command('top_donors', topDonorsHandler);
@@ -199,8 +199,8 @@ bot.command('admin_stats', async (ctx) => {
     const added = parseInt(s.people_added || 0); const converted = parseInt(s.donors_converted || 0);
     const percent = added > 0 ? ((converted / added) * 100).toFixed(1) : '0';
     text += `👤 <b>${s.name || s.username || 'System'}</b>\n` +
-            `🛠 Approved: <b>${s.verified_count || 0}</b> (${parseFloat(s.verified_value || 0).toLocaleString()} ETB)\n` +
-            `🤝 Recruited: <b>${added}</b> | 🎯 Conversion: <b>${percent}%</b>\n\n`;
+      `🛠 Approved: <b>${s.verified_count || 0}</b> (${parseFloat(s.verified_value || 0).toLocaleString()} ETB)\n` +
+      `🤝 Recruited: <b>${added}</b> | 🎯 Conversion: <b>${percent}%</b>\n\n`;
   });
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
@@ -210,15 +210,14 @@ bot.command('my_links', async (ctx) => {
   const userId = ctx.from.id;
   const admin = await db.get('SELECT name FROM admins WHERE id = $1', [userId]);
   if (!admin) return ctx.reply('Unauthorized.');
-  
+
   const botInfo = await ctx.telegram.getMe();
   const link = `https://t.me/${botInfo.username}?start=${userId}`;
-  
+
   const forwardableText = `🙏 <b>Support the Yad Al-Awn Charity Mission</b>\n\n` +
-                          `We invite you to support our cause. Together we can make a difference! You can donate easily and securely using the official link below.\n\n` +
-                          `የያድ አል-አውንን በጎ አድራጎት አላማ እንዲደግፉ በአክብሮት እንጠይቃለን። አብረን በመሆን ትልቅ ለውጥ ማምጣት እንችላለን! ከታች ያለውን ሊንክ በመጠቀም በቀላሉ ልገሳ ማድረግ ይችላሉ።\n\n` +
-                          `👇 <b>Please tap here to start / ለመጀመር እዚህ ይጫኑ:</b>\n` +
-                          `${link}`;
+    `We invite you to support our cause! Together we can make a difference. You can donate easily and securely using the official link below.\n\n` +
+    `የያድ አል-አውንን በጎ አድራጎት አላማ እንዲደግፉ በአክብሮት እንጠይቃለን። አብረን በመሆን ትልቅ ለውጥ ማምጣት እንችላለን! ከታች ያለውን ሊንክ በመጠቀም በቀላሉ ልገሳ ማድረግ ይችላሉ።\n\n` +
+    `👉 <b><a href="${link}">LinK</a></b>`;
 
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("🙏 Support the Yad Al-Awn Charity Mission / የያድ አል-አውንን በጎ አድራጎት አላማ ይደግፉ: ")}`;
 
@@ -231,7 +230,7 @@ bot.command('my_links', async (ctx) => {
 
 bot.command('my_stats', async (ctx) => {
   if (!await isAdmin(ctx.from.id)) return ctx.reply('Unauthorized.');
-  
+
   const recruits = await db.all(`
     SELECT u.username,
     (SELECT COUNT(*) FROM donations d WHERE d.user_id = u.id AND d.status = 'approved') as donated
@@ -249,11 +248,11 @@ bot.command('my_stats', async (ctx) => {
       text += `• ${displayName}: ${statusIcon}\n`;
     });
   }
-  
+
   const statsRow = await db.get(`SELECT SUM(amount) as total FROM donations WHERE collector_id = $1 AND status = 'approved'`, [ctx.from.id]);
   const totalVal = statsRow?.total || 0;
   text += `\n💰 <b>Total Verified Donations:</b> ${parseFloat(totalVal).toLocaleString()} ETB`;
-  
+
   await ctx.reply(text, { parse_mode: 'HTML' });
 });
 
@@ -290,8 +289,8 @@ bot.action(/approve_(\d+)/, async (ctx) => {
   await db.query("UPDATE donations SET status = 'approved', approved_by = $1, approved_at = CURRENT_TIMESTAMP WHERE id = $2", [ctx.from.id, id]);
   await updatePublicStatus(ctx.telegram);
   const lang = (await db.get('SELECT language FROM users WHERE id = $1', [d.user_id]))?.language || 'en';
-  await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + '\n\n✅ <b>APPROVED</b>', { parse_mode: 'HTML' }).catch(()=>{});
-  await ctx.telegram.sendMessage(d.user_id, locales[lang].action_approved, { parse_mode: 'HTML' }).catch(()=>{});
+  await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + '\n\n✅ <b>APPROVED</b>', { parse_mode: 'HTML' }).catch(() => { });
+  await ctx.telegram.sendMessage(d.user_id, locales[lang].action_approved, { parse_mode: 'HTML' }).catch(() => { });
 });
 
 bot.action(/reject_(\d+)/, async (ctx) => {
@@ -300,8 +299,8 @@ bot.action(/reject_(\d+)/, async (ctx) => {
   const d = await db.get('SELECT * FROM donations WHERE id = $1', [id]);
   await db.query("UPDATE donations SET status = 'rejected', approved_by = $1 WHERE id = $2", [ctx.from.id, id]);
   const lang = (await db.get('SELECT language FROM users WHERE id = $1', [d.user_id]))?.language || 'en';
-  await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + '\n\n❌ <b>REJECTED</b>', { parse_mode: 'HTML' }).catch(()=>{});
-  await ctx.telegram.sendMessage(d.user_id, locales[lang].action_rejected, { parse_mode: 'HTML' }).catch(()=>{});
+  await ctx.editMessageCaption((ctx.callbackQuery.message.caption || '') + '\n\n❌ <b>REJECTED</b>', { parse_mode: 'HTML' }).catch(() => { });
+  await ctx.telegram.sendMessage(d.user_id, locales[lang].action_rejected, { parse_mode: 'HTML' }).catch(() => { });
 });
 
 // --- 💣 SUPER ADMIN CONTROLS ---
@@ -361,7 +360,7 @@ bot.command('broadcast', async (ctx) => {
   const users = await db.all('SELECT id, language FROM users');
   for (const u of users) {
     const header = u.language === 'am' ? '📢 <b>መልዕክት</b>' : '📢 <b>Announcement</b>';
-    await ctx.telegram.sendMessage(u.id, `${header}\n\n${msg}`, { parse_mode: 'HTML' }).catch(()=>{});
+    await ctx.telegram.sendMessage(u.id, `${header}\n\n${msg}`, { parse_mode: 'HTML' }).catch(() => { });
   }
   await ctx.reply(`✅ <b>Broadcast complete to ${users.length} users.</b>`, { parse_mode: 'HTML' });
 });

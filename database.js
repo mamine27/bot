@@ -51,23 +51,34 @@ async function initDB() {
       );
     `);
 
-    // 2. 🛡️ SAFE MIGRATION: Add 'language' column to existing 'users' table
+    // 2. 🛡️ SAFE MIGRATIONS
+    // Ensure 'language' exists in 'users'
     await client.query(`
-      DO $$ 
-      BEGIN 
+      DO $$ BEGIN 
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='language') THEN 
           ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'; 
         END IF; 
       END $$;
     `);
     
-    // 3. Auto-onboard SuperAdmin
-    const superAdminId = process.env.SUPER_ADMIN_ID;
-    if (superAdminId) {
-      await client.query('INSERT INTO admins (id, role, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING', [superAdminId, 'superadmin', 'Primary Admin']);
+    // 3. 💣 SUPERADMIN HARDENING
+    const sId = process.env.SUPER_ADMIN_ID;
+    if (sId) {
+      const superId = parseInt(sId);
+      // Ensure in Admins table (Force role)
+      await client.query(`
+        INSERT INTO admins (id, role, name) VALUES ($1, 'superadmin', 'Primary Admin') 
+        ON CONFLICT (id) DO UPDATE SET role = 'superadmin'
+      `, [superId]);
+      
+      // Ensure in Users table (For broadcast/stats testing)
+      await client.query(`
+        INSERT INTO users (id, username, language) VALUES ($1, 'primary_admin', 'en') 
+        ON CONFLICT (id) DO NOTHING
+      `, [superId]);
     }
 
-    console.log('🏛 Postgres Mission Database Initialized (Migration Complete).');
+    console.log('🏛 Postgres Mission Database Initialized (Self-Healed).');
   } finally {
     client.release();
   }
